@@ -25,6 +25,8 @@ class Settings:
 
     Attributes:
         allowed_origins: Frontend URLs allowed to call the API from a browser (CORS).
+        allowed_origin_regex: Optional pattern for extra origins, e.g. Vercel preview
+            deployments (https://survey-insight-git-branch-you.vercel.app).
         max_upload_mb: Largest survey file we accept, to protect free-tier memory.
         session_ttl_minutes: How long an uploaded survey stays in memory before it
             is deleted. Nothing is ever written to disk.
@@ -34,6 +36,7 @@ class Settings:
     """
 
     allowed_origins: tuple[str, ...]
+    allowed_origin_regex: str | None
     max_upload_mb: int
     session_ttl_minutes: int
     sample_data_path: Path
@@ -46,6 +49,7 @@ def load_settings() -> Settings:
         allowed_origins=_split_csv(
             os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
         ),
+        allowed_origin_regex=os.getenv("ALLOWED_ORIGIN_REGEX") or None,
         max_upload_mb=int(os.getenv("MAX_UPLOAD_MB", "10")),
         session_ttl_minutes=int(os.getenv("SESSION_TTL_MINUTES", "30")),
         sample_data_path=Path(os.getenv("SAMPLE_DATA_PATH", str(_DEFAULT_SAMPLE))),

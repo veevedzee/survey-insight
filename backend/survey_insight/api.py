@@ -98,6 +98,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(settings.allowed_origins),
+    allow_origin_regex=settings.allowed_origin_regex,
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
     # Lets the browser read the download's file name across origins.
@@ -136,6 +137,12 @@ def _start_session(data: bytes, filename: str) -> UploadResponse:
         n_columns=df.shape[1],
         columns=[ColumnProfileOut(**asdict(p)) for p in profiles],
     )
+
+
+@app.get("/", include_in_schema=False)
+def root() -> dict[str, str]:
+    """What visitors to the bare API URL (e.g. the Hugging Face Space page) see."""
+    return {"name": "Survey Insight API", "docs": "/docs", "health": "/api/health"}
 
 
 @app.get("/api/health", response_model=HealthResponse)

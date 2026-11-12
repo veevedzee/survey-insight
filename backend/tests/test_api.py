@@ -129,6 +129,39 @@ def test_themes_and_findings_endpoints_with_fake_model() -> None:
         app.dependency_overrides.clear()
 
 
+def test_upload_rejects_files_over_the_size_limit(monkeypatch) -> None:
+    import dataclasses
+
+    import survey_insight.api as api
+
+    monkeypatch.setattr(api, "settings", dataclasses.replace(api.settings, max_upload_mb=0))
+    files = {"file": ("s.csv", b"Faculty\nEngineering\n", "text/csv")}
+    response = client.post("/api/sessions", files=files)
+    assert response.status_code == 413
+
+
+def test_themes_report_503_when_model_is_unavailable() -> None:
+    from survey_insight.api import get_embedder
+
+    class BrokenEmbedder:
+        def encode(self, texts: list[str]):
+            raise RuntimeError("no internet on first run")
+
+    app.dependency_overrides[get_embedder] = BrokenEmbedder
+    try:
+        session_id = client.post("/api/sessions/sample").json()["session_id"]
+        client.post(f"/api/sessions/{session_id}/columns", json={"types": {}})
+        client.get(f"/api/sessions/{session_id}/cleaning")
+        client.post(f"/api/sessions/{session_id}/cleaning", json={"apply": []})
+        response = client.get(f"/api/sessions/{session_id}/themes")
+        assert response.status_code == 503
+        assert "no internet" in response.json()["detail"]
+        # Statistics and findings still work without the model.
+        assert client.get(f"/api/sessions/{session_id}/findings").status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_delete_and_unknown_session() -> None:
     session_id = client.post("/api/sessions/sample").json()["session_id"]
     assert client.delete(f"/api/sessions/{session_id}").status_code == 204
