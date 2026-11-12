@@ -1,10 +1,11 @@
 import { useState } from "react";
 import type { Comparison, Correlation } from "../../api/types";
 import { formatNumber, formatP } from "../../format";
+import { ComparisonChart, ComparisonTable } from "../charts/ComparisonChart";
 
 export function ComparisonCard({ comparison: c }: { comparison: Comparison }) {
   const [open, setOpen] = useState(false);
-  const categorical = c.outcome_kind === "categorical";
+  const [showTable, setShowTable] = useState(false);
   return (
     <article className={`result-card${c.significant ? " result-sig" : ""}`}>
       <p className="sentence" dir="auto">
@@ -26,46 +27,36 @@ export function ComparisonCard({ comparison: c }: { comparison: Comparison }) {
           {w}
         </p>
       ))}
-      <button type="button" className="link-button flush" onClick={() => setOpen((o) => !o)}>
-        {open ? "Hide details" : "Why this test? · group details"}
-      </button>
+
+      <div className="result-chart">
+        {showTable ? (
+          <div className="table-wrap">
+            <ComparisonTable comparison={c} />
+          </div>
+        ) : (
+          <ComparisonChart comparison={c} />
+        )}
+      </div>
+
+      <div className="card-links">
+        <button type="button" className="link-button flush" onClick={() => setOpen((o) => !o)}>
+          {open ? "Hide why" : "Why this test?"}
+        </button>
+        <button
+          type="button"
+          className="link-button flush"
+          onClick={() => setShowTable((s) => !s)}
+          aria-pressed={showTable}
+        >
+          {showTable ? "Show chart" : "Show table"}
+        </button>
+      </div>
       {open && (
         <div className="details">
           <p className="small muted">{c.test_reason}</p>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>{c.group_by}</th>
-                <th className="num">n</th>
-                {categorical ? (
-                  <th className="num">% giving the highlighted answer</th>
-                ) : (
-                  <>
-                    <th className="num">Median</th>
-                    <th className="num">Mean</th>
-                  </>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {c.groups.map((g) => (
-                <tr key={g.group}>
-                  <td dir="auto">{g.group}</td>
-                  <td className="num">{g.n}</td>
-                  {categorical ? (
-                    <td className="num">{formatNumber(g.percent, 1)}%</td>
-                  ) : (
-                    <>
-                      <td className="num">{formatNumber(g.median)}</td>
-                      <td className="num">{formatNumber(g.mean)}</td>
-                    </>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
           <p className="small muted">
-            Unadjusted {formatP(c.p_value)}; test statistic = {formatNumber(c.statistic)}.
+            Unadjusted {formatP(c.p_value)}; test statistic = {formatNumber(c.statistic)}. The
+            adjusted p-value accounts for every test run on this survey.
           </p>
         </div>
       )}

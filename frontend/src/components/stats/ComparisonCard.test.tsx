@@ -20,11 +20,40 @@ const comparison: Comparison = {
   effect_label: "medium",
   n_total: 259,
   groups: [
-    { group: "Engineering", n: 87, median: 4, mean: 3.9, percent: null },
-    { group: "Computer Science", n: 66, median: 3, mean: 3.1, percent: null },
+    {
+      group: "Engineering",
+      n: 87,
+      median: 4,
+      mean: 3.9,
+      q1: 3,
+      q3: 5,
+      percent: null,
+      distribution: [
+        { label: "Disagree", count: 17, percent: 19.5 },
+        { label: "Neutral", count: 20, percent: 23 },
+        { label: "Agree", count: 50, percent: 57.5 },
+      ],
+    },
+    {
+      group: "Computer Science",
+      n: 66,
+      median: 3,
+      mean: 3.1,
+      q1: 2,
+      q3: 4,
+      percent: null,
+      distribution: [
+        { label: "Disagree", count: 26, percent: 39.4 },
+        { label: "Neutral", count: 20, percent: 30.3 },
+        { label: "Agree", count: 20, percent: 30.3 },
+      ],
+    },
   ],
   sentence: "“I worry about my grades” differs by Faculty.",
   warnings: [],
+  levels: ["Disagree", "Neutral", "Agree"],
+  axis_min: null,
+  axis_max: null,
 };
 
 describe("formatP", () => {
@@ -43,6 +72,19 @@ describe("ComparisonCard", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Why this test/ }));
     expect(screen.getByText(/compares ranks/)).toBeInTheDocument();
-    expect(screen.getByText("Engineering")).toBeInTheDocument();
+  });
+
+  it("draws a diverging bar per group, with agree and disagree shares beside it", () => {
+    render(<ComparisonCard comparison={comparison} />);
+    // Engineering: 57.5% agree (rounded 58%), 19.5% disagree (rounded 20%)
+    expect(screen.getByRole("img", { name: /^Engineering: Disagree 20%/ })).toBeInTheDocument();
+    expect(screen.getByText("58%")).toBeInTheDocument();
+  });
+
+  it("has a table view with the same numbers", () => {
+    render(<ComparisonCard comparison={comparison} />);
+    fireEvent.click(screen.getByRole("button", { name: "Show table" }));
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.getByText("57.5%")).toBeInTheDocument();
   });
 });

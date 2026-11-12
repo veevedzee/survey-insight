@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { CleaningResult, StatsReport } from "../api/types";
 import { ComparisonCard, CorrelationCard } from "./stats/ComparisonCard";
-import { QuestionTable } from "./stats/QuestionTable";
+import { QuestionCharts } from "./stats/QuestionCharts";
 import { ScaleCard } from "./stats/ScaleCard";
 
 interface Props {
@@ -11,6 +11,13 @@ interface Props {
   onBack: () => void;
 }
 
+const SECTIONS = [
+  { id: "differences", label: "Group differences" },
+  { id: "relationships", label: "Relationships" },
+  { id: "scales", label: "Scales" },
+  { id: "questions", label: "All questions" },
+];
+
 export function DashboardStep({ result, stats, onEditCleaning, onBack }: Props) {
   const [showAll, setShowAll] = useState(false);
   const significant = stats.comparisons.filter((c) => c.significant);
@@ -19,7 +26,7 @@ export function DashboardStep({ result, stats, onEditCleaning, onBack }: Props) 
   const correlations = showAll ? stats.correlations : sigCorrelations;
 
   return (
-    <section>
+    <section className="dashboard">
       <div className="section-head">
         <h2>Results</h2>
         <p className="muted">
@@ -32,9 +39,21 @@ export function DashboardStep({ result, stats, onEditCleaning, onBack }: Props) 
       <div className="stat-row">
         <Stat value={stats.n_responses} label="responses analysed" />
         <Stat value={stats.scales.filter((s) => s.reliable).length} label="reliable scales" />
-        <Stat value={significant.length} label={`significant group differences of ${stats.comparisons.length}`} />
-        <Stat value={sigCorrelations.length} label={`significant relationships of ${stats.correlations.length}`} />
+        <Stat value={significant.length} label={`significant group differences (of ${stats.comparisons.length})`} />
+        <Stat value={sigCorrelations.length} label={`significant relationships (of ${stats.correlations.length})`} />
       </div>
+
+      <nav className="section-nav" aria-label="Dashboard sections">
+        {SECTIONS.map((s) => (
+          <a key={s.id} href={`#${s.id}`}>
+            {s.label}
+          </a>
+        ))}
+        <label className="toggle">
+          <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
+          Include non-significant results
+        </label>
+      </nav>
 
       <div className="note note-info">
         {stats.notes.map((n) => (
@@ -42,24 +61,9 @@ export function DashboardStep({ result, stats, onEditCleaning, onBack }: Props) 
         ))}
       </div>
 
-      {stats.scales.length > 0 && (
-        <>
-          <h3 className="section-title">Scales and reliability</h3>
-          <div className="grid-2 grid-cards">
-            {stats.scales.map((s) => (
-              <ScaleCard key={s.name} scale={s} />
-            ))}
-          </div>
-        </>
-      )}
-
-      <div className="section-title-row">
-        <h3 className="section-title">Group differences</h3>
-        <label className="toggle">
-          <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
-          Show non-significant results too
-        </label>
-      </div>
+      <h3 className="section-title" id="differences">
+        Group differences
+      </h3>
       {shown.length === 0 ? (
         <p className="muted">No significant group differences after correction.</p>
       ) : (
@@ -70,7 +74,9 @@ export function DashboardStep({ result, stats, onEditCleaning, onBack }: Props) 
         </div>
       )}
 
-      <h3 className="section-title">Relationships between numeric answers</h3>
+      <h3 className="section-title" id="relationships">
+        Relationships between numeric answers
+      </h3>
       {correlations.length === 0 ? (
         <p className="muted">No significant relationships after correction.</p>
       ) : (
@@ -81,10 +87,23 @@ export function DashboardStep({ result, stats, onEditCleaning, onBack }: Props) 
         </div>
       )}
 
-      <h3 className="section-title">Every question at a glance</h3>
-      <QuestionTable questions={stats.questions} />
+      {stats.scales.length > 0 && (
+        <>
+          <h3 className="section-title" id="scales">
+            Scales and reliability
+          </h3>
+          <div className="grid-2 grid-cards">
+            {stats.scales.map((s) => (
+              <ScaleCard key={s.name} scale={s} />
+            ))}
+          </div>
+        </>
+      )}
 
-      <div className="note">Charts for each question arrive in Milestone 5.</div>
+      <h3 className="section-title" id="questions">
+        Every question
+      </h3>
+      <QuestionCharts questions={stats.questions} />
 
       <div className="actions">
         <button type="button" className="button button-ghost" onClick={onBack}>

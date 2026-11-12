@@ -33,6 +33,25 @@
   --t-identifier: #be123c;
   --t-ignore: #6b7280;
 
+  /* Chart colours: validated with the dataviz palette checker (light surface #fff).
+     Diverging arms (Likert): red = disagree, blue = agree, grey = neutral midpoint. */
+  --series-1: #2a78d6;
+  --div-neg-2: #c93a39;
+  --div-neg-1: #f0a09f;
+  --div-mid: #c3c2b7;
+  --div-pos-1: #86b6ef;
+  --div-pos-2: #256abf;
+  --cat-1: #2a78d6;
+  --cat-2: #eb6834;
+  --cat-3: #1baf7a;
+  --cat-4: #eda100;
+  --cat-5: #e87ba4;
+  --cat-6: #008300;
+  --cat-7: #6250d6;
+  --cat-8: #e34948;
+  --chart-grid: #e6e8f0;
+  --chart-axis: #c3c6d4;
+
   --radius: 14px;
   --radius-sm: 9px;
   --shadow: 0 1px 2px rgb(23 27 46 / 5%), 0 8px 24px -12px rgb(23 27 46 / 18%);
@@ -73,6 +92,24 @@
     --t-time: #94a3b8;
     --t-identifier: #fb7185;
     --t-ignore: #9ca3af;
+
+    /* Dark steps chosen for the dark surface (#151931), validated separately. */
+    --series-1: #3987e5;
+    --div-neg-2: #e66767;
+    --div-neg-1: #8f2a2a;
+    --div-mid: #4b5068;
+    --div-pos-1: #184f95;
+    --div-pos-2: #6da7ec;
+    --cat-1: #3987e5;
+    --cat-2: #d95926;
+    --cat-3: #199e70;
+    --cat-4: #c98500;
+    --cat-5: #d55181;
+    --cat-6: #008300;
+    --cat-7: #9085e9;
+    --cat-8: #e66767;
+    --chart-grid: #232947;
+    --chart-axis: #39405f;
 
     --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 10px 30px -12px rgb(0 0 0 / 60%);
     color-scheme: dark;
@@ -1008,6 +1045,271 @@ blockquote {
 .warning-inline {
   color: var(--t-numeric);
   margin: 0.4rem 0 0;
+}
+
+/* ---------- Dashboard & charts ---------- */
+.section-nav {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1rem;
+  margin: 0 calc(-1 * clamp(1.25rem, 3vw, 2.25rem)) 1rem;
+  padding: 0.6rem clamp(1.25rem, 3vw, 2.25rem);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.88rem;
+}
+
+.section-nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.section-nav a:hover {
+  color: var(--accent);
+}
+
+.section-nav .toggle {
+  margin-left: auto;
+}
+
+.section-title {
+  scroll-margin-top: 4rem;
+}
+
+.chart-card {
+  margin: 0 0 1rem;
+  padding: 1rem 1.15rem 1.1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  min-width: 0;
+}
+
+.chart-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.chart-head h4 {
+  margin: 0 0 0.15rem;
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  gap: 0 1rem;
+}
+
+.result-chart {
+  margin-top: 0.9rem;
+}
+
+.card-links {
+  display: flex;
+  gap: 1.25rem;
+  margin-top: 0.6rem;
+}
+
+.card-links .link-button {
+  margin-top: 0;
+}
+
+/* Legends */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.swatch-band {
+  background: color-mix(in srgb, var(--series-1) 30%, transparent);
+  height: 10px;
+  width: 18px;
+}
+
+.swatch-dot {
+  background: var(--series-1);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+/* Diverging Likert bars */
+.likert-row,
+.stack-row,
+.range-row {
+  margin-bottom: 0.7rem;
+}
+
+.likert-label,
+.stack-label {
+  font-size: 0.85rem;
+  margin-bottom: 0.25rem;
+}
+
+.likert-bar,
+.likert-axis,
+.range-line {
+  display: grid;
+  grid-template-columns: 2.6rem 1fr 2.6rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.likert-side {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.likert-neg {
+  text-align: right;
+}
+
+.likert-track,
+.range-track {
+  position: relative;
+  height: 18px;
+}
+
+.likert-grid {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  background: var(--chart-grid);
+}
+
+.likert-zero {
+  background: var(--chart-axis);
+  z-index: 2;
+}
+
+.likert-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* 2px surface gap between neighbouring segments */
+  box-shadow: inset -2px 0 0 var(--surface);
+}
+
+.likert-axis {
+  margin-top: 0.15rem;
+}
+
+.likert-axis-track {
+  position: relative;
+  height: 1rem;
+}
+
+.likert-axis-track span {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 100% stacked category bars */
+.stack-track {
+  display: flex;
+  height: 22px;
+  border-radius: 4px;
+  overflow: hidden;
+  gap: 2px;
+}
+
+.stack-seg {
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 2px;
+}
+
+/* Range plots */
+.range-line {
+  grid-template-columns: 1fr 3rem;
+}
+
+.range-axis {
+  display: grid;
+  grid-template-columns: 0 1fr;
+}
+
+.range-axis-row {
+  display: grid;
+  grid-template-columns: 1fr 3rem;
+  gap: 0.5rem;
+}
+
+.range-band {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--series-1) 30%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  .range-band,
+  .swatch-band {
+    background: color-mix(in srgb, var(--series-1) 45%, transparent);
+  }
+}
+
+.range-dot {
+  position: absolute;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--series-1);
+  box-shadow: 0 0 0 2px var(--surface);
+  transform: translate(-50%, -50%);
+  z-index: 3;
+}
+
+.range-value {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Recharts text inherits the app font */
+.recharts-wrapper,
+.recharts-text {
+  font-family: var(--font);
 }
 
 /* ---------- Footer ---------- */

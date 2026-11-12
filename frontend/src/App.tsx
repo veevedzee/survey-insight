@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import {
   ApiError,
   applyCleaning,
@@ -20,13 +20,18 @@ import type {
 } from "./api/types";
 import { CleaningStep } from "./components/CleaningStep";
 import { ColumnsStep } from "./components/ColumnsStep";
-import { DashboardStep } from "./components/DashboardStep";
 import { Logo } from "./components/Logo";
 import { PrivacyStep } from "./components/PrivacyStep";
 import { StepIndicator } from "./components/StepIndicator";
 import { UploadStep } from "./components/UploadStep";
 
-type BackendState = { kind: "checking" } | { kind: "up"; version: string } | { kind: "down" };
+// The dashboard (and the charting library) is only downloaded when it's needed,
+// which keeps the first page load small.
+const DashboardStep = lazy(() =>
+  import("./components/DashboardStep").then((m) => ({ default: m.DashboardStep })),
+);
+
+type BackendState ={ kind: "checking" } | { kind: "up"; version: string } | { kind: "down" };
 
 // The whole wizard state in one place. Each step only exists once the
 // previous one has produced its data, so impossible states can't be represented.
@@ -202,7 +207,9 @@ export default function App() {
         </div>
       )}
 
-      <main className="card card-main">{renderStep()}</main>
+      <main className="card card-main">
+        <Suspense fallback={<p className="muted">Loading the dashboard…</p>}>{renderStep()}</Suspense>
+      </main>
 
       <footer className="app-footer">
         Built with FastAPI, pandas and React &middot; zero-cost, open-source stack &middot; no paid

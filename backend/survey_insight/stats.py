@@ -170,6 +170,7 @@ class NumericSummary:
     min: float
     max: float
     histogram: list[HistogramBin]
+    discrete: bool = False  # one bin per possible value (label bins by their value)
 
 
 @dataclass
@@ -224,8 +225,12 @@ class GroupStat:
     n: int
     median: float | None = None
     mean: float | None = None
+    q1: float | None = None
+    q3: float | None = None
     # For categorical outcomes: the share choosing the most telling answer.
     percent: float | None = None
+    # Answer distribution within the group (Likert levels or categories), for charts.
+    distribution: list[ChoiceCount] | None = None
 
 
 @dataclass
@@ -249,6 +254,10 @@ class Comparison:
     groups: list[GroupStat]
     sentence: str = ""
     warnings: list[str] = field(default_factory=list)
+    # For charts: answer order (Likert levels / categories) and the value axis range.
+    levels: list[str] | None = None
+    axis_min: float | None = None
+    axis_max: float | None = None
 
 
 @dataclass
@@ -358,10 +367,34 @@ def _first_level(levels: list[str]) -> int:
     return int(levels[0]) if levels and levels[0].lstrip("-").isdigit() else 1
 
 
+def _grid_step(x: pd.Series) -> float | None:
+    """The step answers are given in (1 for ages, 0.5 for "6.5 hours"), if there is one."""
+    values = np.unique(x.to_numpy(dtype=float))
+    if len(values) < 2:
+        return None
+    for step in (1.0, 0.5, 0.25, 0.1):
+        offsets = (values - values[0]) / step
+        if np.allclose(offsets, np.round(offsets), atol=1e-6):
+            return step
+    return None
+
+
 def _numeric_summary(x: pd.Series) -> NumericSummary:
-    edges = np.histogram_bin_edges(x, bins="auto")
-    if len(edges) > 21:
-        edges = np.histogram_bin_edges(x, bins=20)
+    """Summary statistics plus histogram bins.
+
+    Answers given on a regular grid (whole numbers, half hours...) with at most
+    30 steps get one bin per possible value. numpy's "auto" rule would otherwise
+    cut bins narrower than the grid, leaving every other bin empty (a "comb").
+    """
+    low, high = float(x.min()), float(x.max())
+    step = _grid_step(x)
+    discrete = step is not None and (high - low) / step <= 30
+    if discrete:
+        edges = low + step * np.arange(round((high - low) / step) + 2)
+    else:
+        edges = np.histogram_bin_edges(x, bins="auto")
+        if len(edges) > 21:
+            edges = np.histogram_bin_edges(x, bins=20)
     counts, edges = np.histogram(x, bins=edges)
     return NumericSummary(
         mean=_round(float(x.mean()), 2), sd=_round(float(x.std(ddof=1)) if len(x) > 1 else 0.0, 2),
@@ -370,6 +403,7 @@ def _numeric_summary(x: pd.Series) -> NumericSummary:
         max=_round(float(x.max()), 2),
         histogram=[HistogramBin(_round(float(a), 2), _round(float(b), 2), int(c))
                    for a, b, c in zip(edges[:-1], edges[1:], counts, strict=True)],
+        discrete=discrete,
     )
 
 
@@ -451,8 +485,7 @@ def compare_ordinal(values: pd.Series, groups: pd.Series) -> Comparison:
     names = list(data)
     arrays = list(data.values())
     n_total = sum(len(a) for a in arrays)
-    stats_ = [GroupStat(k, len(v), _round(float(np.median(v)), 2), _round(float(v.mean()), 2))
-              for k, v in data.items()]
+    stats_ = _group_stats(data)
     if len(arrays) == 2:
         res = sps.mannwhitneyu(arrays[0], arrays[1], alternative="two-sided")
         effect = rank_biserial(res.statistic, len(arrays[0]), len(arrays[1]))
@@ -486,8 +519,7 @@ def compare_numeric(values: pd.Series, groups: pd.Series) -> Comparison:
         return result
 
     n_total = sum(len(a) for a in arrays)
-    stats_ = [GroupStat(k, len(v), _round(float(np.median(v)), 2), _round(float(v.mean()), 2))
-              for k, v in data.items()]
+    stats_ = _group_stats(data)
     if len(arrays) == 2:
         res = sps.ttest_ind(arrays[0], arrays[1], equal_var=False)
         d = cohens_d(arrays[0], arrays[1])
@@ -544,12 +576,27 @@ def compare_categorical(outcome: pd.Series, groups: pd.Series) -> tuple[Comparis
     _, col_index = np.unravel_index(np.argmax(residuals), residuals.shape)
     answer = str(table.columns[col_index])
     percents = 100 * observed[:, col_index] / observed.sum(axis=1)
-    stats_ = [GroupStat(str(g), int(n), percent=_round(float(pct), 1))
-              for g, n, pct in zip(table.index, observed.sum(axis=1), percents, strict=True)]
+    # Categories in overall-frequency order, so every group's bar uses the same order.
+    order = list(table.sum(axis=0).sort_values(ascending=False).index)
+    stats_ = []
+    for g, n, pct in zip(table.index, observed.sum(axis=1), percents, strict=True):
+        row = table.loc[g]
+        stats_.append(GroupStat(
+            str(g), int(n), percent=_round(float(pct), 1),
+            distribution=[ChoiceCount(str(c), int(row[c]), _round(100 * row[c] / n, 1))
+                          for c in order]))
     result = Comparison("", "", "categorical", "", test, reason, _round(float(chi2)), float(p),
                         float(p), False, "Cramér's V", _round(v), label, n_total, stats_,
-                        warnings=warnings)
+                        warnings=warnings, levels=[str(c) for c in order])
     return result, answer
+
+
+def _group_stats(data: dict[str, np.ndarray]) -> list[GroupStat]:
+    return [GroupStat(k, len(v), median=_round(float(np.median(v)), 2),
+                      mean=_round(float(v.mean()), 2),
+                      q1=_round(float(np.quantile(v, 0.25)), 2),
+                      q3=_round(float(np.quantile(v, 0.75)), 2))
+            for k, v in data.items()]
 
 
 def _group_arrays(values: pd.Series, groups: pd.Series) -> dict[str, np.ndarray]:
@@ -559,6 +606,28 @@ def _group_arrays(values: pd.Series, groups: pd.Series) -> dict[str, np.ndarray]
     if len(data) < 2:
         raise ValueError("Fewer than two groups with enough responses.")
     return data
+
+
+def _add_chart_data(result: Comparison, kind: str, values: pd.Series, groups: pd.Series,
+                    levels: list[str] | None) -> None:
+    """Attach what the frontend needs to draw this comparison."""
+    if kind == "likert" and levels:
+        offset = _first_level(levels)
+        result.levels = levels
+        for g in result.groups:
+            scores = values[(groups == g.group) & values.notna()]
+            g.distribution = [
+                ChoiceCount(level, int((scores == offset + i).sum()),
+                            _round(100 * float((scores == offset + i).mean()), 1))
+                for i, level in enumerate(levels)
+            ]
+    elif kind == "scale" and levels:
+        result.axis_min, result.axis_max = float(_first_level(levels)), \
+            float(_first_level(levels) + len(levels) - 1)
+    else:
+        present = values.dropna()
+        if len(present):
+            result.axis_min, result.axis_max = float(present.min()), float(present.max())
 
 
 # --------------------------------------------------------------------------- #
@@ -627,6 +696,7 @@ def build_stats(df: pd.DataFrame, types: dict[str, ColumnType],
             grids.setdefault(group, []).append(c)
     scales: list[ScaleResult] = []
     scale_values: dict[str, pd.Series] = {}
+    scale_levels: dict[str, list[str]] = {}  # score column -> its items' levels (axis range)
     for name, items in grids.items():
         if len(items) < 2:
             continue
@@ -635,6 +705,7 @@ def build_stats(df: pd.DataFrame, types: dict[str, ColumnType],
         scales.append(result)
         if result.reliable and result.score_column:
             scale_values[result.score_column] = scale_scores(matrix)
+            scale_levels[result.score_column] = _levels_for(by_name.get(items[0]), df[items[0]])
 
     # Group comparisons: every outcome against every grouping variable.
     group_cols = [c for c in cols if types[c] == ColumnType.SINGLE_CHOICE
@@ -661,6 +732,9 @@ def build_stats(df: pd.DataFrame, types: dict[str, ColumnType],
             result.outcome, result.outcome_kind, result.group_by = name, kind, g
             result.outcome_label = (name.removeprefix("Scale score: ") + " (scale score)"
                                     if kind == "scale" else short_label(name))
+            _add_chart_data(result, kind, values, groups,
+                            _levels_for(by_name.get(name), df[name]) if kind == "likert"
+                            else scale_levels.get(name))
             comparisons.append(result)
             telling.append(None)
     for a, b in combinations(group_cols, 2):

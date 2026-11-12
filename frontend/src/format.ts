@@ -8,5 +8,7 @@ export function formatP(p: number): string {
 
 export function formatNumber(x: number | null | undefined, digits = 2): string {
   if (x === null || x === undefined || Number.isNaN(x)) return "–";
-  return Number.isInteger(x) ? String(x) : x.toFixed(digits);
+  if (Number.isInteger(x)) return String(x);
+  // Drop trailing zeros: 23.50 -> 23.5, but keep 0.08 as 0.08.
+  return String(Number(x.toFixed(digits)));
 }

@@ -104,6 +104,7 @@ export interface NumericSummary {
   min: number;
   max: number;
   histogram: HistogramBin[];
+  discrete: boolean;
 }
 
 export interface LikertSummary {
@@ -149,7 +150,10 @@ export interface GroupStat {
   n: number;
   median: number | null;
   mean: number | null;
+  q1: number | null;
+  q3: number | null;
   percent: number | null;
+  distribution: ChoiceCount[] | null;
 }
 
 export interface Comparison {
@@ -170,6 +174,9 @@ export interface Comparison {
   groups: GroupStat[];
   sentence: string;
   warnings: string[];
+  levels: string[] | null;
+  axis_min: number | null;
+  axis_max: number | null;
 }
 
 export interface Correlation {

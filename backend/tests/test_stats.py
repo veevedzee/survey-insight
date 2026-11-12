@@ -197,6 +197,14 @@ def test_numeric_description() -> None:
     assert sum(b.count for b in summary.numeric.histogram) == 5
 
 
+def test_half_hour_answers_get_one_bin_per_value() -> None:
+    hours = ["6", "6.5", "7", "7", "8.5", "6.5", "9"]
+    summary = describe_question(pd.Series(hours, name="Sleep"), ColumnType.NUMERIC).numeric
+    assert summary.discrete
+    assert [b.start for b in summary.histogram] == [6, 6.5, 7, 7.5, 8, 8.5, 9]
+    assert [b.count for b in summary.histogram] == [1, 2, 2, 0, 0, 1, 1]
+
+
 def test_reverse_worded_item_is_flagged() -> None:
     rng = np.random.default_rng(4)
     trait = rng.normal(size=60)
@@ -238,3 +246,10 @@ def test_build_stats_end_to_end_with_planted_effect() -> None:
     assert scale.significant
     assert "Engineering" in scale.sentence.split("Highest:")[1].split(";")[0]
     assert all(c.p_adjusted >= c.p_value for c in report.comparisons)
+
+    # Chart data: scale scores get a 1-5 axis; Likert items get per-group distributions.
+    assert (scale.axis_min, scale.axis_max) == (1.0, 5.0)
+    item = next(c for c in report.comparisons if c.outcome_kind == "likert")
+    assert item.levels == AGREE
+    for g in item.groups:
+        assert sum(d.count for d in g.distribution) == g.n
