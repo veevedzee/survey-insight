@@ -58,6 +58,52 @@ class MaskedColumnOut(BaseModel):
     examples: list[str]
 
 
+class FlagExampleOut(BaseModel):
+    row: int  # 0-based row index; the UI shows "response #row+1"
+    detail: str
+
+
+class CheckOut(BaseModel):
+    """One data-quality check and the responses it flagged."""
+
+    key: str
+    label: str
+    description: str
+    action: str  # "exclude" the response or "blank" the value
+    available: bool
+    unavailable_reason: str | None
+    n_flagged: int
+    flagged_rows: list[int]
+    examples: list[FlagExampleOut]
+
+
+class NormalizationOut(BaseModel):
+    column: str
+    n_changed: int
+    changes: list[tuple[str, str]]
+
+
+class CleaningReportOut(BaseModel):
+    """Every check, so the user can choose what to exclude."""
+
+    n_rows: int
+    checks: list[CheckOut]
+    normalizations: list[NormalizationOut]
+
+
+class ApplyCleaningRequest(BaseModel):
+    """Keys of the checks the user wants applied."""
+
+    apply: list[str] = Field(default_factory=list)
+
+
+class CleaningResultOut(BaseModel):
+    n_before: int
+    n_after: int
+    n_values_blanked: int
+    applied: list[str]
+
+
 class PrivacyReportOut(BaseModel):
     """What the privacy step removed before any analysis."""
 

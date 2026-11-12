@@ -14,6 +14,8 @@ Flow of one analysis::
     POST /api/sessions             upload a file      -> detected column types
     POST /api/sessions/sample      use the demo file  -> detected column types
     POST /api/sessions/{id}/columns confirm types     -> privacy report
+    GET  /api/sessions/{id}/cleaning                  -> data-quality checks
+    POST /api/sessions/{id}/cleaning choose exclusions -> before/after counts
     DELETE /api/sessions/{id}      forget everything now
 """
 
@@ -26,14 +28,21 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from survey_insight import __version__
+from survey_insight.cleaning import apply_cleaning, build_report
 from survey_insight.config import settings
 from survey_insight.loading import SurveyFileError, profile_columns, read_survey
 from survey_insight.privacy import anonymize
 from survey_insight.schemas import (
+    ApplyCleaningRequest,
+    CheckOut,
+    CleaningReportOut,
+    CleaningResultOut,
     ColumnProfileOut,
     ConfirmColumnsRequest,
+    FlagExampleOut,
     HealthResponse,
     MaskedColumnOut,
+    NormalizationOut,
     PrivacyReportOut,
     RemovedColumnOut,
     UploadResponse,
@@ -143,6 +152,44 @@ def confirm_columns(session_id: str, body: ConfirmColumnsRequest) -> PrivacyRepo
         n_columns=clean.shape[1],
         limitations=PRIVACY_LIMITATIONS,
     )
+
+
+@app.get("/api/sessions/{session_id}/cleaning", response_model=CleaningReportOut)
+def cleaning_report(session_id: str) -> CleaningReportOut:
+    """Run every data-quality check on the anonymised data."""
+    session = _get_session(session_id)
+    if session.data is None:
+        raise HTTPException(409, "Confirm the column types first.")
+    if session.cleaning is None:  # computed once, then cached in the session
+        session.data, session.cleaning = build_report(session.data, session.types,
+                                                      session.profiles)
+    report = session.cleaning
+    return CleaningReportOut(
+        n_rows=report.n_rows,
+        checks=[
+            CheckOut(
+                key=c.key, label=c.label, description=c.description, action=c.action,
+                available=c.available, unavailable_reason=c.unavailable_reason,
+                n_flagged=len(c.flagged_rows), flagged_rows=c.flagged_rows,
+                examples=[FlagExampleOut(**asdict(e)) for e in c.examples[:8]],
+            )
+            for c in report.checks
+        ],
+        normalizations=[NormalizationOut(**asdict(n)) for n in report.normalizations],
+    )
+
+
+@app.post("/api/sessions/{session_id}/cleaning", response_model=CleaningResultOut)
+def apply_cleaning_choices(session_id: str, body: ApplyCleaningRequest) -> CleaningResultOut:
+    """Apply the checks the user ticked. Can be called again to change the choice."""
+    session = _get_session(session_id)
+    if session.data is None or session.cleaning is None:
+        raise HTTPException(409, "Open the cleaning report first.")
+    try:
+        session.analysis, result = apply_cleaning(session.data, session.cleaning, body.apply)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return CleaningResultOut(**asdict(result))
 
 
 @app.delete("/api/sessions/{session_id}", status_code=204)

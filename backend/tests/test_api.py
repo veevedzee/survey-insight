@@ -60,6 +60,26 @@ def test_confirm_rejects_unknown_columns() -> None:
     assert response.status_code == 422
 
 
+def test_cleaning_flow_on_sample_data() -> None:
+    session_id = client.post("/api/sessions/sample").json()["session_id"]
+    assert client.get(f"/api/sessions/{session_id}/cleaning").status_code == 409
+
+    client.post(f"/api/sessions/{session_id}/columns", json={"types": {}})
+    report = client.get(f"/api/sessions/{session_id}/cleaning").json()
+    checks = {c["key"]: c for c in report["checks"]}
+    assert checks["duplicates"]["n_flagged"] == 8
+    assert checks["outliers"]["n_flagged"] == 4
+    assert checks["speeders"]["available"]
+    assert checks["straight_lining"]["n_flagged"] >= 10
+    assert report["normalizations"]
+
+    result = client.post(f"/api/sessions/{session_id}/cleaning",
+                         json={"apply": ["duplicates"]}).json()
+    assert result == {"n_before": 300, "n_after": 292, "n_values_blanked": 0,
+                      "applied": ["duplicates"]}
+    assert len(store.get(session_id).analysis) == 292
+
+
 def test_delete_and_unknown_session() -> None:
     session_id = client.post("/api/sessions/sample").json()["session_id"]
     assert client.delete(f"/api/sessions/{session_id}").status_code == 204

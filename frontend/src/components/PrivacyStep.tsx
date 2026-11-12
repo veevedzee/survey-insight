@@ -15,10 +15,12 @@ function kindLabel(kind: string, n: number): string {
 
 interface Props {
   report: PrivacyReport;
+  busy: boolean;
+  onContinue: () => void;
   onBack: () => void;
 }
 
-export function PrivacyStep({ report, onBack }: Props) {
+export function PrivacyStep({ report, busy, onContinue, onBack }: Props) {
   return (
     <section>
       <div className="section-head">
@@ -93,12 +95,12 @@ export function PrivacyStep({ report, onBack }: Props) {
       </div>
 
       <div className="actions">
-        <button type="button" className="button button-ghost" onClick={onBack}>
+        <button type="button" className="button button-ghost" onClick={onBack} disabled={busy}>
           Start over
         </button>
-        <span className="muted actions-note">The cleaning report arrives in Milestone 3.</span>
-        <button type="button" className="button" disabled>
-          Continue to cleaning
+        <span className="actions-note" />
+        <button type="button" className="button" onClick={onContinue} disabled={busy}>
+          {busy ? "Checking data quality…" : "Continue to cleaning"}
         </button>
       </div>
     </section>

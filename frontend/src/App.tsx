@@ -1,14 +1,24 @@
 import { useEffect, useState } from "react";
 import {
   ApiError,
+  applyCleaning,
   confirmColumns,
   deleteSession,
+  getCleaningReport,
   getHealth,
   startSampleSession,
   uploadSurvey,
 } from "./api/client";
-import type { ColumnType, PrivacyReport, UploadResponse } from "./api/types";
+import type {
+  CleaningReport,
+  CleaningResult,
+  ColumnType,
+  PrivacyReport,
+  UploadResponse,
+} from "./api/types";
+import { CleaningStep } from "./components/CleaningStep";
 import { ColumnsStep } from "./components/ColumnsStep";
+import { DashboardStep } from "./components/DashboardStep";
 import { Logo } from "./components/Logo";
 import { PrivacyStep } from "./components/PrivacyStep";
 import { StepIndicator } from "./components/StepIndicator";
@@ -21,9 +31,29 @@ type BackendState = { kind: "checking" } | { kind: "up"; version: string } | { k
 type Wizard =
   | { step: "upload" }
   | { step: "columns"; upload: UploadResponse }
-  | { step: "privacy"; upload: UploadResponse; privacy: PrivacyReport };
+  | { step: "privacy"; upload: UploadResponse; privacy: PrivacyReport }
+  | {
+      step: "cleaning";
+      upload: UploadResponse;
+      privacy: PrivacyReport;
+      cleaning: CleaningReport;
+      applied?: string[];
+    }
+  | {
+      step: "dashboard";
+      upload: UploadResponse;
+      privacy: PrivacyReport;
+      cleaning: CleaningReport;
+      result: CleaningResult;
+    };
 
-const STEP_INDEX: Record<Wizard["step"], number> = { upload: 0, columns: 1, privacy: 2 };
+const STEP_INDEX: Record<Wizard["step"], number> = {
+  upload: 0,
+  columns: 1,
+  privacy: 2,
+  cleaning: 3,
+  dashboard: 4,
+};
 
 export default function App() {
   const [backend, setBackend] = useState<BackendState>({ kind: "checking" });
@@ -36,6 +66,11 @@ export default function App() {
       .then((h) => setBackend({ kind: "up", version: h.version }))
       .catch(() => setBackend({ kind: "down" }));
   }, []);
+
+  // Scroll to the top whenever the step changes.
+  useEffect(() => {
+    window.scrollTo?.({ top: 0, behavior: "smooth" });
+  }, [wizard.step]);
 
   async function run<T>(action: () => Promise<T>, onDone: (result: T) => void) {
     setBusy(true);
@@ -58,6 +93,85 @@ export default function App() {
 
   const onUploaded = (upload: UploadResponse) => setWizard({ step: "columns", upload });
 
+  function renderStep() {
+    switch (wizard.step) {
+      case "upload":
+        return (
+          <UploadStep
+            busy={busy}
+            onFile={(file) => run(() => uploadSurvey(file), onUploaded)}
+            onSample={() => run(startSampleSession, onUploaded)}
+          />
+        );
+      case "columns":
+        return (
+          <ColumnsStep
+            upload={wizard.upload}
+            busy={busy}
+            onBack={startOver}
+            onConfirm={(types: Record<string, ColumnType>) =>
+              run(
+                () => confirmColumns(wizard.upload.session_id, types),
+                (privacy) => setWizard({ step: "privacy", upload: wizard.upload, privacy }),
+              )
+            }
+          />
+        );
+      case "privacy":
+        return (
+          <PrivacyStep
+            report={wizard.privacy}
+            busy={busy}
+            onBack={startOver}
+            onContinue={() =>
+              run(
+                () => getCleaningReport(wizard.upload.session_id),
+                (cleaning) => setWizard({ ...wizard, step: "cleaning", cleaning }),
+              )
+            }
+          />
+        );
+      case "cleaning":
+        return (
+          <CleaningStep
+            report={wizard.cleaning}
+            busy={busy}
+            initiallyApplied={wizard.applied}
+            onBack={startOver}
+            onApply={(keys) =>
+              run(
+                () => applyCleaning(wizard.upload.session_id, keys),
+                (result) =>
+                  setWizard({
+                    step: "dashboard",
+                    upload: wizard.upload,
+                    privacy: wizard.privacy,
+                    cleaning: wizard.cleaning,
+                    result,
+                  }),
+              )
+            }
+          />
+        );
+      case "dashboard":
+        return (
+          <DashboardStep
+            result={wizard.result}
+            onBack={startOver}
+            onEditCleaning={() =>
+              setWizard({
+                step: "cleaning",
+                upload: wizard.upload,
+                privacy: wizard.privacy,
+                cleaning: wizard.cleaning,
+                applied: wizard.result.applied,
+              })
+            }
+          />
+        );
+    }
+  }
+
   return (
     <div className="app">
       <header className="topbar">
@@ -79,29 +193,7 @@ export default function App() {
         </div>
       )}
 
-      <main className="card card-main">
-        {wizard.step === "upload" && (
-          <UploadStep
-            busy={busy}
-            onFile={(file) => run(() => uploadSurvey(file), onUploaded)}
-            onSample={() => run(startSampleSession, onUploaded)}
-          />
-        )}
-        {wizard.step === "columns" && (
-          <ColumnsStep
-            upload={wizard.upload}
-            busy={busy}
-            onBack={startOver}
-            onConfirm={(types: Record<string, ColumnType>) =>
-              run(
-                () => confirmColumns(wizard.upload.session_id, types),
-                (privacy) => setWizard({ step: "privacy", upload: wizard.upload, privacy }),
-              )
-            }
-          />
-        )}
-        {wizard.step === "privacy" && <PrivacyStep report={wizard.privacy} onBack={startOver} />}
-      </main>
+      <main className="card card-main">{renderStep()}</main>
 
       <footer className="app-footer">
         Built with FastAPI, pandas and React &middot; zero-cost, open-source stack &middot; no paid

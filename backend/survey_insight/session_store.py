@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 
+from survey_insight.cleaning import CleaningReport
 from survey_insight.loading import ColumnProfile, ColumnType
 from survey_insight.privacy import PrivacyReport
 
@@ -38,6 +39,8 @@ class Session:
     data: pd.DataFrame | None = None
     types: dict[str, ColumnType] = field(default_factory=dict)
     privacy: PrivacyReport | None = None
+    cleaning: CleaningReport | None = None
+    analysis: pd.DataFrame | None = None  # data after the user's cleaning choices
     last_used: float = field(default_factory=time.monotonic)
 
 

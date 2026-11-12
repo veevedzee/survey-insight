@@ -669,6 +669,176 @@ blockquote {
   font-size: 0.85rem;
 }
 
+/* ---------- Cleaning ---------- */
+.small {
+  font-size: 0.85rem;
+}
+
+.block {
+  display: block;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.accent {
+  color: var(--accent);
+}
+
+.card-flat {
+  box-shadow: none;
+  background: var(--surface-2);
+}
+
+.before-after {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 0.5rem 1.25rem;
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.before-after .arrow {
+  color: var(--muted);
+}
+
+.keep-bar {
+  grid-column: 1 / -1;
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--t-identifier) 25%, transparent);
+  overflow: hidden;
+}
+
+.keep-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.before-after p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.checks {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.check {
+  padding: 1rem 1.15rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.check-on {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 35%, var(--surface));
+}
+
+.check-disabled {
+  opacity: 0.7;
+}
+
+.check-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.check-toggle {
+  display: flex;
+  gap: 0.75rem;
+  cursor: pointer;
+}
+
+.check-toggle input {
+  margin-top: 0.25rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: var(--accent);
+  flex: none;
+}
+
+.check-note {
+  margin: 0.5rem 0 0 1.8rem;
+}
+
+.count-pill {
+  flex: none;
+  min-width: 2.5rem;
+  text-align: center;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.count-pill-on {
+  background: color-mix(in srgb, var(--t-numeric) 14%, transparent);
+  color: var(--t-numeric);
+  border-color: transparent;
+}
+
+.link-button {
+  margin: 0.5rem 0 0 1.8rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
+.example-list {
+  list-style: none;
+  margin: 0.5rem 0 0 1.8rem;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+.example-list li {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px dashed var(--border);
+}
+
+.example-list li:last-child {
+  border-bottom: none;
+}
+
+.row-tag {
+  flex: none;
+  min-width: 3rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- Footer ---------- */
 .app-footer {
   margin-top: 2rem;

@@ -1,6 +1,13 @@
 // Typed wrapper around fetch. Every backend call goes through here, so the
 // base URL and error handling live in one place.
-import type { ColumnType, HealthResponse, PrivacyReport, UploadResponse } from "./types";
+import type {
+  CleaningReport,
+  CleaningResult,
+  ColumnType,
+  HealthResponse,
+  PrivacyReport,
+  UploadResponse,
+} from "./types";
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
@@ -56,6 +63,18 @@ export function confirmColumns(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ types }),
+  });
+}
+
+export function getCleaningReport(sessionId: string): Promise<CleaningReport> {
+  return request<CleaningReport>(`/api/sessions/${sessionId}/cleaning`);
+}
+
+export function applyCleaning(sessionId: string, apply: string[]): Promise<CleaningResult> {
+  return request<CleaningResult>(`/api/sessions/${sessionId}/cleaning`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ apply }),
   });
 }
 
