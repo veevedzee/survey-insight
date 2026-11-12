@@ -102,6 +102,33 @@ def test_stats_endpoint_on_sample_data() -> None:
     assert sleep_stress["rho"] < 0 and sleep_stress["significant"]
 
 
+def test_themes_and_findings_endpoints_with_fake_model() -> None:
+    from survey_insight.api import get_embedder
+    from tests.fakes import FakeEmbedder
+
+    app.dependency_overrides[get_embedder] = FakeEmbedder
+    try:
+        session_id = client.post("/api/sessions/sample").json()["session_id"]
+        client.post(f"/api/sessions/{session_id}/columns", json={"types": {}})
+        report = client.get(f"/api/sessions/{session_id}/cleaning").json()
+        client.post(f"/api/sessions/{session_id}/cleaning",
+                    json={"apply": [c["key"] for c in report["checks"]]})
+
+        themes = client.get(f"/api/sessions/{session_id}/themes").json()
+        assert len(themes["columns"]) == 2
+        challenge = themes["columns"][0]
+        assert challenge["n_filler"] > 0
+        assert challenge["themes"] and challenge["themes"][0]["quotes"]
+        assert "English" in themes["sentiment_note"]
+
+        findings = client.get(f"/api/sessions/{session_id}/findings").json()
+        kinds = [f["kind"] for f in findings]
+        assert "difference" in kinds and "theme" in kinds
+        assert all(f["text"] for f in findings)
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_delete_and_unknown_session() -> None:
     session_id = client.post("/api/sessions/sample").json()["session_id"]
     assert client.delete(f"/api/sessions/{session_id}").status_code == 204

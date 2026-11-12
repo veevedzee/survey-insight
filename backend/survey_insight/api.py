@@ -17,21 +17,26 @@ Flow of one analysis::
     GET  /api/sessions/{id}/cleaning                  -> data-quality checks
     POST /api/sessions/{id}/cleaning choose exclusions -> before/after counts
     GET  /api/sessions/{id}/stats                     -> statistics
+    GET  /api/sessions/{id}/themes                    -> themes in open-ended answers
+    GET  /api/sessions/{id}/findings                  -> rule-based key findings
     DELETE /api/sessions/{id}      forget everything now
 """
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import asdict
 from typing import Annotated
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from survey_insight import __version__
 from survey_insight.cleaning import apply_cleaning, build_report
 from survey_insight.config import settings
-from survey_insight.loading import SurveyFileError, profile_columns, read_survey
+from survey_insight.findings import Finding, build_findings
+from survey_insight.loading import ColumnType, SurveyFileError, profile_columns, read_survey
 from survey_insight.privacy import anonymize
 from survey_insight.schemas import (
     ApplyCleaningRequest,
@@ -50,11 +55,40 @@ from survey_insight.schemas import (
 )
 from survey_insight.session_store import Session, SessionNotFound, SessionStore
 from survey_insight.stats import StatsReport, build_stats
+from survey_insight.text_themes import (
+    MODEL_NAME,
+    Embedder,
+    EmbeddingModel,
+    ThemesReport,
+    build_themes,
+)
+
+embedding_model = EmbeddingModel()
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Start loading the embedding model as soon as the server starts.
+
+    Loading takes a few seconds, so it runs in a background thread: the API
+    answers health checks and uploads immediately, and by the time a user
+    reaches the dashboard the model is usually ready.
+    """
+    if settings.load_model:
+        embedding_model.start_loading()
+    yield
+
+
+def get_embedder() -> Embedder:
+    """FastAPI dependency: the shared model (tests override this with a fake)."""
+    return embedding_model
+
 
 app = FastAPI(
     title="Survey Insight API",
     version=__version__,
     description="Upload a survey export and get cleaned data, statistics and themes.",
+    lifespan=lifespan,
 )
 
 # The frontend is served from a different origin (Vercel) than the API
@@ -192,6 +226,7 @@ def apply_cleaning_choices(session_id: str, body: ApplyCleaningRequest) -> Clean
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     session.stats = None  # different rows -> statistics must be recomputed
+    session.themes = None
     return CleaningResultOut(**asdict(result))
 
 
@@ -206,6 +241,34 @@ def statistics(session_id: str) -> StatsReport:
     if session.stats is None:
         session.stats = build_stats(session.analysis, session.types, session.profiles)
     return session.stats
+
+
+@app.get("/api/sessions/{session_id}/themes", response_model=ThemesReport)
+def themes(session_id: str, embedder: Annotated[Embedder, Depends(get_embedder)]) -> ThemesReport:
+    """Themes, example quotes and (English-only) sentiment for every free-text column."""
+    session = _get_session(session_id)
+    if session.analysis is None:
+        raise HTTPException(409, "Apply the cleaning choices first.")
+    if session.themes is None:
+        text_cols = [c for c, t in session.types.items() if t == ColumnType.TEXT]
+        try:
+            session.themes = build_themes(session.analysis, text_cols, embedder,
+                                          getattr(embedder, "name", MODEL_NAME))
+        except RuntimeError as exc:  # model failed to load (e.g. no internet on first run)
+            raise HTTPException(503, f"Theme detection is unavailable: {exc}") from exc
+    return session.themes
+
+
+@app.get("/api/sessions/{session_id}/findings", response_model=list[Finding])
+def findings(session_id: str) -> list[Finding]:
+    """Rule-based key findings from the statistics (and themes, once computed)."""
+    session = _get_session(session_id)
+    if session.analysis is None or session.data is None:
+        raise HTTPException(409, "Apply the cleaning choices first.")
+    if session.stats is None:
+        session.stats = build_stats(session.analysis, session.types, session.profiles)
+    n_excluded = len(session.data) - len(session.analysis)
+    return build_findings(session.stats, session.themes, n_excluded)
 
 
 @app.delete("/api/sessions/{session_id}", status_code=204)

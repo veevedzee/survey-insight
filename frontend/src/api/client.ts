@@ -4,9 +4,11 @@ import type {
   CleaningReport,
   CleaningResult,
   ColumnType,
+  Finding,
   HealthResponse,
   PrivacyReport,
   StatsReport,
+  ThemesReport,
   UploadResponse,
 } from "./types";
 
@@ -81,6 +83,14 @@ export function applyCleaning(sessionId: string, apply: string[]): Promise<Clean
 
 export function getStats(sessionId: string): Promise<StatsReport> {
   return request<StatsReport>(`/api/sessions/${sessionId}/stats`);
+}
+
+export function getThemes(sessionId: string): Promise<ThemesReport> {
+  return request<ThemesReport>(`/api/sessions/${sessionId}/themes`);
+}
+
+export function getFindings(sessionId: string): Promise<Finding[]> {
+  return request<Finding[]>(`/api/sessions/${sessionId}/findings`);
 }
 
 export function deleteSession(sessionId: string): Promise<void> {

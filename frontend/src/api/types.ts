@@ -202,6 +202,60 @@ export interface StatsReport {
   notes: string[];
 }
 
+// ---- Themes and findings (mirror text_themes.py and findings.py) ----
+
+export interface SentimentSummary {
+  n_english: number;
+  mean_compound: number;
+  positive_percent: number;
+  neutral_percent: number;
+  negative_percent: number;
+}
+
+export interface ThemeQuote {
+  text: string;
+  language: "en" | "ar" | "mixed";
+}
+
+export interface Theme {
+  id: number;
+  label: string;
+  keywords: string[];
+  size: number;
+  percent: number;
+  quotes: ThemeQuote[];
+  languages: Record<string, number>;
+  sentiment: SentimentSummary | null;
+}
+
+export interface ColumnThemes {
+  column: string;
+  n_answers: number;
+  n_used: number;
+  n_filler: number;
+  sampled: boolean;
+  k: number;
+  silhouette: number | null;
+  quality: string;
+  themes: Theme[];
+  sentiment: SentimentSummary | null;
+  notes: string[];
+}
+
+export interface ThemesReport {
+  model: string;
+  columns: ColumnThemes[];
+  sentiment_note: string;
+}
+
+export interface Finding {
+  kind: "difference" | "relationship" | "reliability" | "agreement" | "theme" | "quality" | "custom";
+  title: string;
+  text: string;
+  importance: number;
+  evidence: string;
+}
+
 export interface PrivacyReport {
   removed_columns: RemovedColumn[];
   masked_columns: MaskedColumn[];

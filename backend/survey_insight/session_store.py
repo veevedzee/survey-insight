@@ -23,6 +23,7 @@ from survey_insight.cleaning import CleaningReport
 from survey_insight.loading import ColumnProfile, ColumnType
 from survey_insight.privacy import PrivacyReport
 from survey_insight.stats import StatsReport
+from survey_insight.text_themes import ThemesReport
 
 
 @dataclass
@@ -43,6 +44,7 @@ class Session:
     cleaning: CleaningReport | None = None
     analysis: pd.DataFrame | None = None  # data after the user's cleaning choices
     stats: StatsReport | None = None  # cached; reset when cleaning choices change
+    themes: ThemesReport | None = None  # cached; reset when cleaning choices change
     last_used: float = field(default_factory=time.monotonic)
 
 

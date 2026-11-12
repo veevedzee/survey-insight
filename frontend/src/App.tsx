@@ -169,6 +169,7 @@ export default function App() {
       case "dashboard":
         return (
           <DashboardStep
+            sessionId={wizard.upload.session_id}
             result={wizard.result}
             stats={wizard.stats}
             onBack={startOver}

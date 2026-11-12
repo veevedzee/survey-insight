@@ -1,10 +1,14 @@
-import { useState } from "react";
-import type { CleaningResult, StatsReport } from "../api/types";
+import { useEffect, useState } from "react";
+import { ApiError, getFindings, getThemes } from "../api/client";
+import type { CleaningResult, Finding, StatsReport, ThemesReport } from "../api/types";
 import { ComparisonCard, CorrelationCard } from "./stats/ComparisonCard";
+import { KeyFindings } from "./stats/KeyFindings";
 import { QuestionCharts } from "./stats/QuestionCharts";
 import { ScaleCard } from "./stats/ScaleCard";
+import { ThemesSection } from "./stats/ThemeCards";
 
 interface Props {
+  sessionId: string;
   result: CleaningResult;
   stats: StatsReport;
   onEditCleaning: () => void;
@@ -12,14 +16,44 @@ interface Props {
 }
 
 const SECTIONS = [
+  { id: "findings", label: "Key findings" },
+  { id: "themes", label: "Themes" },
   { id: "differences", label: "Group differences" },
   { id: "relationships", label: "Relationships" },
   { id: "scales", label: "Scales" },
   { id: "questions", label: "All questions" },
 ];
 
-export function DashboardStep({ result, stats, onEditCleaning, onBack }: Props) {
+export function DashboardStep({ sessionId, result, stats, onEditCleaning, onBack }: Props) {
   const [showAll, setShowAll] = useState(false);
+  const [findings, setFindings] = useState<Finding[] | null>(null);
+  const [themes, setThemes] = useState<ThemesReport | null>(null);
+  const [themesError, setThemesError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Findings from the statistics come back instantly. Themes need the language
+  // model and take longer, so they load after, and then the findings are
+  // refreshed to include the top theme of each open-ended question.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const quick = await getFindings(sessionId);
+        if (!cancelled) setFindings(quick);
+        const report = await getThemes(sessionId);
+        if (cancelled) return;
+        setThemes(report);
+        setFindings(await getFindings(sessionId));
+      } catch (e) {
+        if (!cancelled) setThemesError(e instanceof ApiError ? e.message : "Theme detection failed.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, result]);
   const significant = stats.comparisons.filter((c) => c.significant);
   const shown = showAll ? stats.comparisons : significant;
   const sigCorrelations = stats.correlations.filter((c) => c.significant);
@@ -54,6 +88,16 @@ export function DashboardStep({ result, stats, onEditCleaning, onBack }: Props) 
           Include non-significant results
         </label>
       </nav>
+
+      <h3 className="section-title" id="findings">
+        Key findings
+      </h3>
+      <KeyFindings findings={findings} loading={loading} />
+
+      <h3 className="section-title" id="themes">
+        Themes in open-ended answers
+      </h3>
+      <ThemesSection report={themes} loading={loading} error={themesError} />
 
       <div className="note note-info">
         {stats.notes.map((n) => (
