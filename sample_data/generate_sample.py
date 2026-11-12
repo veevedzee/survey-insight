@@ -56,7 +56,7 @@ OUTPUT = Path(__file__).with_name("student_wellbeing_survey.csv")
 # --------------------------------------------------------------------------- #
 # Column names
 # --------------------------------------------------------------------------- #
-STRESS_Q = "Over the past month, how much do you agree?"
+STRESS_Q = "Stress over the past month (how much do you agree?)"
 STRESS_ITEMS = [
     "I feel overwhelmed by my coursework",
     "I find it hard to relax after studying",

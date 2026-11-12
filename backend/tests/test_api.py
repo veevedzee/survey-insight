@@ -80,6 +80,28 @@ def test_cleaning_flow_on_sample_data() -> None:
     assert len(store.get(session_id).analysis) == 292
 
 
+def test_stats_endpoint_on_sample_data() -> None:
+    session_id = client.post("/api/sessions/sample").json()["session_id"]
+    client.post(f"/api/sessions/{session_id}/columns", json={"types": {}})
+    assert client.get(f"/api/sessions/{session_id}/stats").status_code == 409
+
+    report = client.get(f"/api/sessions/{session_id}/cleaning").json()
+    client.post(f"/api/sessions/{session_id}/cleaning",
+                json={"apply": [c["key"] for c in report["checks"]]})
+    body = client.get(f"/api/sessions/{session_id}/stats").json()
+
+    assert body["n_responses"] == 262
+    assert {s["label"] for s in body["scales"]} == {"Stress over the past month", "Study habits"}
+    assert all(s["reliable"] for s in body["scales"])
+    stress_by_faculty = next(c for c in body["comparisons"]
+                             if c["outcome_kind"] == "scale" and c["group_by"] == "Faculty"
+                             and "Stress" in c["outcome"])
+    assert stress_by_faculty["significant"]
+    sleep_stress = next(c for c in body["correlations"]
+                        if "sleep" in c["x"] and "Stress" in c["y"])
+    assert sleep_stress["rho"] < 0 and sleep_stress["significant"]
+
+
 def test_delete_and_unknown_session() -> None:
     session_id = client.post("/api/sessions/sample").json()["session_id"]
     assert client.delete(f"/api/sessions/{session_id}").status_code == 204

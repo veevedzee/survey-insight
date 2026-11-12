@@ -6,6 +6,7 @@ import {
   deleteSession,
   getCleaningReport,
   getHealth,
+  getStats,
   startSampleSession,
   uploadSurvey,
 } from "./api/client";
@@ -14,6 +15,7 @@ import type {
   CleaningResult,
   ColumnType,
   PrivacyReport,
+  StatsReport,
   UploadResponse,
 } from "./api/types";
 import { CleaningStep } from "./components/CleaningStep";
@@ -45,6 +47,7 @@ type Wizard =
       privacy: PrivacyReport;
       cleaning: CleaningReport;
       result: CleaningResult;
+      stats: StatsReport;
     };
 
 const STEP_INDEX: Record<Wizard["step"], number> = {
@@ -140,14 +143,19 @@ export default function App() {
             onBack={startOver}
             onApply={(keys) =>
               run(
-                () => applyCleaning(wizard.upload.session_id, keys),
-                (result) =>
+                async () => {
+                  const result = await applyCleaning(wizard.upload.session_id, keys);
+                  const stats = await getStats(wizard.upload.session_id);
+                  return { result, stats };
+                },
+                ({ result, stats }) =>
                   setWizard({
                     step: "dashboard",
                     upload: wizard.upload,
                     privacy: wizard.privacy,
                     cleaning: wizard.cleaning,
                     result,
+                    stats,
                   }),
               )
             }
@@ -157,6 +165,7 @@ export default function App() {
         return (
           <DashboardStep
             result={wizard.result}
+            stats={wizard.stats}
             onBack={startOver}
             onEditCleaning={() =>
               setWizard({

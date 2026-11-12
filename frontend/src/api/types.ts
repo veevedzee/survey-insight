@@ -81,6 +81,120 @@ export interface CleaningResult {
   applied: string[];
 }
 
+// ---- Statistics (mirrors the dataclasses in backend/survey_insight/stats.py) ----
+
+export interface ChoiceCount {
+  label: string;
+  count: number;
+  percent: number;
+}
+
+export interface HistogramBin {
+  start: number;
+  end: number;
+  count: number;
+}
+
+export interface NumericSummary {
+  mean: number;
+  sd: number;
+  median: number;
+  q1: number;
+  q3: number;
+  min: number;
+  max: number;
+  histogram: HistogramBin[];
+}
+
+export interface LikertSummary {
+  median_label: string;
+  mean_score: number;
+  agree_percent: number;
+  disagree_percent: number;
+}
+
+export interface QuestionSummary {
+  column: string;
+  label: string;
+  type: ColumnType;
+  n: number;
+  n_missing: number;
+  scale_group: string | null;
+  counts: ChoiceCount[] | null;
+  numeric: NumericSummary | null;
+  likert: LikertSummary | null;
+}
+
+export interface ItemStat {
+  column: string;
+  label: string;
+  item_total_r: number | null;
+  alpha_if_deleted: number | null;
+}
+
+export interface ScaleResult {
+  name: string;
+  label: string;
+  items: ItemStat[];
+  n_complete: number;
+  alpha: number | null;
+  interpretation: string;
+  reliable: boolean;
+  score_column: string | null;
+  warnings: string[];
+}
+
+export interface GroupStat {
+  group: string;
+  n: number;
+  median: number | null;
+  mean: number | null;
+  percent: number | null;
+}
+
+export interface Comparison {
+  outcome: string;
+  outcome_label: string;
+  outcome_kind: "likert" | "numeric" | "scale" | "categorical";
+  group_by: string;
+  test: string;
+  test_reason: string;
+  statistic: number;
+  p_value: number;
+  p_adjusted: number;
+  significant: boolean;
+  effect_name: string;
+  effect_size: number;
+  effect_label: string;
+  n_total: number;
+  groups: GroupStat[];
+  sentence: string;
+  warnings: string[];
+}
+
+export interface Correlation {
+  x: string;
+  y: string;
+  x_label: string;
+  y_label: string;
+  rho: number;
+  p_value: number;
+  p_adjusted: number;
+  significant: boolean;
+  effect_label: string;
+  n: number;
+  sentence: string;
+}
+
+export interface StatsReport {
+  n_responses: number;
+  questions: QuestionSummary[];
+  scales: ScaleResult[];
+  comparisons: Comparison[];
+  correlations: Correlation[];
+  notes: string[];
+}
+
 export interface PrivacyReport {
   removed_columns: RemovedColumn[];
   masked_columns: MaskedColumn[];

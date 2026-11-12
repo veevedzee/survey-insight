@@ -136,7 +136,7 @@ export function CleaningStep({ report, busy, initiallyApplied, onApply, onBack }
           disabled={busy}
           onClick={() => onApply([...selected])}
         >
-          {busy ? "Applying…" : "Apply and continue"}
+          {busy ? "Running statistics…" : "Apply and continue"}
         </button>
       </div>
     </section>

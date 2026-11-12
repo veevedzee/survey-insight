@@ -16,6 +16,7 @@ Flow of one analysis::
     POST /api/sessions/{id}/columns confirm types     -> privacy report
     GET  /api/sessions/{id}/cleaning                  -> data-quality checks
     POST /api/sessions/{id}/cleaning choose exclusions -> before/after counts
+    GET  /api/sessions/{id}/stats                     -> statistics
     DELETE /api/sessions/{id}      forget everything now
 """
 
@@ -48,6 +49,7 @@ from survey_insight.schemas import (
     UploadResponse,
 )
 from survey_insight.session_store import Session, SessionNotFound, SessionStore
+from survey_insight.stats import StatsReport, build_stats
 
 app = FastAPI(
     title="Survey Insight API",
@@ -189,7 +191,21 @@ def apply_cleaning_choices(session_id: str, body: ApplyCleaningRequest) -> Clean
         session.analysis, result = apply_cleaning(session.data, session.cleaning, body.apply)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
+    session.stats = None  # different rows -> statistics must be recomputed
     return CleaningResultOut(**asdict(result))
+
+
+# FastAPI accepts the plain dataclasses from stats.py as the response model,
+# so the JSON shape is defined in one place. NaN values are sent as null.
+@app.get("/api/sessions/{session_id}/stats", response_model=StatsReport)
+def statistics(session_id: str) -> StatsReport:
+    """Descriptives, scale reliability, group comparisons and correlations."""
+    session = _get_session(session_id)
+    if session.analysis is None:
+        raise HTTPException(409, "Apply the cleaning choices first.")
+    if session.stats is None:
+        session.stats = build_stats(session.analysis, session.types, session.profiles)
+    return session.stats
 
 
 @app.delete("/api/sessions/{session_id}", status_code=204)

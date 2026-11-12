@@ -6,6 +6,7 @@ import type {
   ColumnType,
   HealthResponse,
   PrivacyReport,
+  StatsReport,
   UploadResponse,
 } from "./types";
 
@@ -76,6 +77,10 @@ export function applyCleaning(sessionId: string, apply: string[]): Promise<Clean
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ apply }),
   });
+}
+
+export function getStats(sessionId: string): Promise<StatsReport> {
+  return request<StatsReport>(`/api/sessions/${sessionId}/stats`);
 }
 
 export function deleteSession(sessionId: string): Promise<void> {
