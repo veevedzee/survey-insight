@@ -1,6 +1,6 @@
 # Survey Insight
 
-[![CI](https://github.com/YOUR_GITHUB_USERNAME/survey-insight/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_GITHUB_USERNAME/survey-insight/actions/workflows/ci.yml)
+[![CI](https://github.com/veevedzee/survey-insight/actions/workflows/ci.yml/badge.svg)](https://github.com/veevedzee/survey-insight/actions/workflows/ci.yml)
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 

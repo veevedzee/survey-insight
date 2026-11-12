@@ -12,7 +12,7 @@ short_description: Backend API for Survey Insight, an open-source survey analyti
 
 # Survey Insight API
 
-The FastAPI backend of [Survey Insight](https://github.com/YOUR_GITHUB_USERNAME/survey-insight):
+The FastAPI backend of [Survey Insight](https://github.com/veevedzee/survey-insight):
 it cleans survey exports, removes personal data, runs the statistics and finds
 themes in open-ended answers with an open-source multilingual model.
 
