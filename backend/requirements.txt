@@ -1,0 +1,10 @@
+# Runtime dependencies. "~=" allows bug-fix updates but not breaking ones.
+# Heavier ML libraries (scipy, scikit-learn, sentence-transformers, vaderSentiment)
+# are added in the milestones that first use them.
+fastapi~=0.162.5
+uvicorn[standard]~=0.54.0
+pydantic~=2.14
+python-multipart~=0.0.33
+pandas~=3.1.1
+numpy~=2.5.4
+openpyxl~=3.1.5
