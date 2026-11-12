@@ -442,7 +442,8 @@ def generate(seed: int = SEED) -> pd.DataFrame:
     df.loc[pii_rows[1], COL_HELP] = f"Counseling. Call me on {_fake_phone(rng)} if you want details"
     df.loc[pii_rows[2], COL_CHALLENGE] = f"المواصلات، ممكن تكلمني على {_fake_phone(rng)}"
     df.loc[pii_rows[3], COL_CHALLENGE] = "Workload. My ID is 231004567 if you need to follow up"
-    df.loc[pii_rows[4], COL_HELP] = "Less deadlines - Omar Mahmoud, Engineering"
+    # Some people sign their answer with their own name.
+    df.loc[pii_rows[4], COL_HELP] = f"Less deadlines - {df.loc[pii_rows[4], 'Name']}"
     log["PII inside free text"] = len(pii_rows)
 
     # Scattered skipped grid items (1.5% of Likert cells).

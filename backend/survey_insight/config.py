@@ -8,6 +8,10 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_DEFAULT_SAMPLE = _REPO_ROOT / "sample_data" / "student_wellbeing_survey.csv"
 
 
 def _split_csv(value: str) -> tuple[str, ...]:
@@ -24,11 +28,13 @@ class Settings:
         max_upload_mb: Largest survey file we accept, to protect free-tier memory.
         session_ttl_minutes: How long an uploaded survey stays in memory before it
             is deleted. Nothing is ever written to disk.
+        sample_data_path: The bundled demo survey behind "Try with sample data".
     """
 
     allowed_origins: tuple[str, ...]
     max_upload_mb: int
     session_ttl_minutes: int
+    sample_data_path: Path
 
 
 def load_settings() -> Settings:
@@ -39,6 +45,7 @@ def load_settings() -> Settings:
         ),
         max_upload_mb=int(os.getenv("MAX_UPLOAD_MB", "10")),
         session_ttl_minutes=int(os.getenv("SESSION_TTL_MINUTES", "30")),
+        sample_data_path=Path(os.getenv("SAMPLE_DATA_PATH", str(_DEFAULT_SAMPLE))),
     )
 
 

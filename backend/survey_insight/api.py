@@ -8,16 +8,37 @@ without starting a web server.
 Run locally (from the ``backend`` folder)::
 
     uvicorn survey_insight.api:app --reload --port 8000
+
+Flow of one analysis::
+
+    POST /api/sessions             upload a file      -> detected column types
+    POST /api/sessions/sample      use the demo file  -> detected column types
+    POST /api/sessions/{id}/columns confirm types     -> privacy report
+    DELETE /api/sessions/{id}      forget everything now
 """
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from dataclasses import asdict
+from typing import Annotated
+
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from survey_insight import __version__
 from survey_insight.config import settings
-from survey_insight.schemas import HealthResponse
+from survey_insight.loading import SurveyFileError, profile_columns, read_survey
+from survey_insight.privacy import anonymize
+from survey_insight.schemas import (
+    ColumnProfileOut,
+    ConfirmColumnsRequest,
+    HealthResponse,
+    MaskedColumnOut,
+    PrivacyReportOut,
+    RemovedColumnOut,
+    UploadResponse,
+)
+from survey_insight.session_store import Session, SessionNotFound, SessionStore
 
 app = FastAPI(
     title="Survey Insight API",
@@ -34,8 +55,97 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+store = SessionStore(ttl_seconds=settings.session_ttl_minutes * 60)
+
+PRIVACY_LIMITATIONS = [
+    "Names inside written answers are only caught when the same name appears in a name column.",
+    "Detection uses patterns (emails, phone numbers, ID-like numbers); unusual formats may slip "
+    "through, so skim the masked examples above.",
+]
+
+
+def _get_session(session_id: str) -> Session:
+    try:
+        return store.get(session_id)
+    except SessionNotFound:
+        raise HTTPException(
+            404, "This session has expired. Please upload the file again."
+        ) from None
+
+
+def _start_session(data: bytes, filename: str) -> UploadResponse:
+    try:
+        df = read_survey(data, filename)
+    except SurveyFileError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    profiles = profile_columns(df)
+    session = store.create(filename, df, profiles)
+    return UploadResponse(
+        session_id=session.id,
+        filename=filename,
+        n_rows=len(df),
+        n_columns=df.shape[1],
+        columns=[ColumnProfileOut(**asdict(p)) for p in profiles],
+    )
+
 
 @app.get("/api/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     """Report that the API is running and which version is deployed."""
     return HealthResponse(status="ok", version=__version__)
+
+
+@app.post("/api/sessions", response_model=UploadResponse)
+async def upload_survey(file: Annotated[UploadFile, File()]) -> UploadResponse:
+    """Read an uploaded CSV/XLSX and detect the type of every column."""
+    limit = settings.max_upload_mb * 1024 * 1024
+    data = await file.read(limit + 1)
+    if len(data) > limit:
+        raise HTTPException(413, f"Files up to {settings.max_upload_mb} MB are supported.")
+    return _start_session(data, file.filename or "upload.csv")
+
+
+@app.post("/api/sessions/sample", response_model=UploadResponse)
+def use_sample_data() -> UploadResponse:
+    """Start a session with the bundled synthetic student survey."""
+    path = settings.sample_data_path
+    if not path.exists():
+        raise HTTPException(500, "Sample data is missing on the server.")
+    return _start_session(path.read_bytes(), path.name)
+
+
+@app.post("/api/sessions/{session_id}/columns", response_model=PrivacyReportOut)
+def confirm_columns(session_id: str, body: ConfirmColumnsRequest) -> PrivacyReportOut:
+    """Save the confirmed column types, then remove personal data.
+
+    After this call the original upload (with personal data) is discarded.
+    """
+    session = _get_session(session_id)
+    if session.raw is None:
+        raise HTTPException(409, "Columns were already confirmed. Start over to change them.")
+    known = {p.name for p in session.profiles}
+    unknown = set(body.types) - known
+    if unknown:
+        raise HTTPException(422, f"Unknown columns: {', '.join(sorted(unknown))}")
+
+    types = {p.name: body.types.get(p.name, p.detected_type) for p in session.profiles}
+    clean, report = anonymize(session.raw, types)
+    session.types = {c: t for c, t in types.items() if c in clean.columns}
+    session.data = clean
+    session.privacy = report
+    session.raw = None  # the only copy with personal data is dropped here
+
+    return PrivacyReportOut(
+        removed_columns=[RemovedColumnOut(**asdict(c)) for c in report.removed_columns],
+        masked_columns=[MaskedColumnOut(**asdict(c)) for c in report.masked_columns],
+        total_masked=report.total_masked,
+        n_rows=len(clean),
+        n_columns=clean.shape[1],
+        limitations=PRIVACY_LIMITATIONS,
+    )
+
+
+@app.delete("/api/sessions/{session_id}", status_code=204)
+def delete_session(session_id: str) -> None:
+    """Forget a session and its data immediately."""
+    store.delete(session_id)
