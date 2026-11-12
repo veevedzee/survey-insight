@@ -102,31 +102,42 @@ def test_stats_endpoint_on_sample_data() -> None:
     assert sleep_stress["rho"] < 0 and sleep_stress["significant"]
 
 
-def test_themes_and_findings_endpoints_with_fake_model() -> None:
-    from survey_insight.api import get_embedder
+def _cleaned_sample_session() -> str:
+    session_id = client.post("/api/sessions/sample").json()["session_id"]
+    client.post(f"/api/sessions/{session_id}/columns", json={"types": {}})
+    report = client.get(f"/api/sessions/{session_id}/cleaning").json()
+    client.post(f"/api/sessions/{session_id}/cleaning",
+                json={"apply": [c["key"] for c in report["checks"]]})
+    return session_id
+
+
+def test_themes_flow_with_vectors_from_the_browser() -> None:
+    """GET texts -> embed (here: a fake model standing in for the browser) -> POST vectors."""
     from tests.fakes import FakeEmbedder
 
-    app.dependency_overrides[get_embedder] = FakeEmbedder
-    try:
-        session_id = client.post("/api/sessions/sample").json()["session_id"]
-        client.post(f"/api/sessions/{session_id}/columns", json={"types": {}})
-        report = client.get(f"/api/sessions/{session_id}/cleaning").json()
-        client.post(f"/api/sessions/{session_id}/cleaning",
-                    json={"apply": [c["key"] for c in report["checks"]]})
+    session_id = _cleaned_sample_session()
+    to_embed = client.get(f"/api/sessions/{session_id}/texts").json()
+    assert to_embed["model"] == "Xenova/paraphrase-multilingual-MiniLM-L12-v2"
+    assert len(to_embed["columns"]) == 2
+    first = to_embed["columns"][0]["texts"]
+    assert len(first) == len(set(first)) > 10  # distinct answers only
+    assert not any(t in ("N/A", "nothing") for t in first)  # filler removed
 
-        themes = client.get(f"/api/sessions/{session_id}/themes").json()
-        assert len(themes["columns"]) == 2
-        challenge = themes["columns"][0]
-        assert challenge["n_filler"] > 0
-        assert challenge["themes"] and challenge["themes"][0]["quotes"]
-        assert "English" in themes["sentiment_note"]
+    fake = FakeEmbedder()
+    body = {"columns": [{"column": c["column"], "texts": c["texts"],
+                         "vectors": fake.encode(c["texts"]).round(4).tolist()}
+                        for c in to_embed["columns"]]}
+    themes = client.post(f"/api/sessions/{session_id}/themes", json=body).json()
+    assert len(themes["columns"]) == 2
+    challenge = themes["columns"][0]
+    assert challenge["n_filler"] > 0
+    assert challenge["themes"] and challenge["themes"][0]["quotes"]
+    assert "English" in themes["sentiment_note"]
 
-        findings = client.get(f"/api/sessions/{session_id}/findings").json()
-        kinds = [f["kind"] for f in findings]
-        assert "difference" in kinds and "theme" in kinds
-        assert all(f["text"] for f in findings)
-    finally:
-        app.dependency_overrides.clear()
+    findings = client.get(f"/api/sessions/{session_id}/findings").json()
+    kinds = [f["kind"] for f in findings]
+    assert "difference" in kinds and "theme" in kinds
+    assert all(f["text"] for f in findings)
 
 
 def test_upload_rejects_files_over_the_size_limit(monkeypatch) -> None:
@@ -140,26 +151,23 @@ def test_upload_rejects_files_over_the_size_limit(monkeypatch) -> None:
     assert response.status_code == 413
 
 
-def test_themes_report_503_when_model_is_unavailable() -> None:
-    from survey_insight.api import get_embedder
+def test_themes_reject_missing_or_malformed_vectors() -> None:
+    session_id = _cleaned_sample_session()
+    to_embed = client.get(f"/api/sessions/{session_id}/texts").json()
+    texts = to_embed["columns"][0]["texts"]
 
-    class BrokenEmbedder:
-        def encode(self, texts: list[str]):
-            raise RuntimeError("no internet on first run")
+    # Only the first column embedded: answers of the second column have no vector.
+    partial = {"columns": [{"column": "x", "texts": texts, "vectors": [[0.1] * 384] * len(texts)}]}
+    response = client.post(f"/api/sessions/{session_id}/themes", json=partial)
+    assert response.status_code == 422
+    assert "no vector" in response.json()["detail"]
 
-    app.dependency_overrides[get_embedder] = BrokenEmbedder
-    try:
-        session_id = client.post("/api/sessions/sample").json()["session_id"]
-        client.post(f"/api/sessions/{session_id}/columns", json={"types": {}})
-        client.get(f"/api/sessions/{session_id}/cleaning")
-        client.post(f"/api/sessions/{session_id}/cleaning", json={"apply": []})
-        response = client.get(f"/api/sessions/{session_id}/themes")
-        assert response.status_code == 503
-        assert "no internet" in response.json()["detail"]
-        # Statistics and findings still work without the model.
-        assert client.get(f"/api/sessions/{session_id}/findings").status_code == 200
-    finally:
-        app.dependency_overrides.clear()
+    wrong_size = {"columns": [{"column": "x", "texts": texts[:2], "vectors": [[0.1] * 5] * 2}]}
+    response = client.post(f"/api/sessions/{session_id}/themes", json=wrong_size)
+    assert response.status_code == 422
+
+    # Statistics and findings still work without themes.
+    assert client.get(f"/api/sessions/{session_id}/findings").status_code == 200
 
 
 def test_delete_and_unknown_session() -> None:

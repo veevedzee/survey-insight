@@ -4,19 +4,27 @@ import { SentimentBadge } from "./SentimentBadge";
 
 const LANGUAGE_NAMES: Record<string, string> = { en: "English", ar: "Arabic", mixed: "Mixed" };
 
-export function ThemesSection({ report, loading, error }: {
+export function ThemesSection({ report, loading, error, status, progress }: {
   report: ThemesReport | null;
   loading: boolean;
   error: string | null;
+  status: string;
+  /** 0..1 for the current stage, or null when unknown. */
+  progress: number | null;
 }) {
   if (error) return <div className="alert">{error}</div>;
   if (!report) {
     return (
       <div className="loading-card" role="status">
         <span className="spinner" aria-hidden="true" />
-        {loading
-          ? "Reading the open-ended answers… The first run loads the language model, which can take up to a minute."
-          : "No themes yet."}
+        <div className="loading-body">
+          <span>{loading ? status : "No themes yet."}</span>
+          {loading && progress !== null && (
+            <div className="theme-bar" aria-hidden="true">
+              <span style={{ width: `${Math.round(progress * 100)}%` }} />
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -27,7 +35,8 @@ export function ThemesSection({ report, loading, error }: {
     <>
       <p className="muted small">
         Themes are found by meaning, not exact words, using the open-source model{" "}
-        <code>{report.model.split("/").pop()}</code>, which understands Arabic and English.{" "}
+        <code>{report.model.split("/").pop()}</code>, which understands Arabic and English and ran
+        in your browser.{" "}
         {report.sentiment_note}
       </p>
       {report.columns.map((col) => (

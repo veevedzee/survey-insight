@@ -1,7 +1,5 @@
-"""Shared test setup."""
+"""Shared test setup.
 
-import os
-
-# Tests never download or load the real embedding model (they use a fake one),
-# so the API must not start loading it on startup.
-os.environ.setdefault("LOAD_MODEL", "0")
+Tests never use the real embedding model (it runs in the browser); they use
+the fake one in tests/fakes.py, which has a known right answer.
+"""

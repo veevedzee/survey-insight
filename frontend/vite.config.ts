@@ -6,6 +6,11 @@ import { defineConfig } from "vitest/config";
 // In production VITE_API_URL points at the deployed backend instead.
 export default defineConfig({
   plugins: [react()],
+  // The embedding worker imports Transformers.js; ES-module workers let Vite
+  // split it into its own chunk that loads only when themes are computed.
+  worker: {
+    format: "es",
+  },
   server: {
     port: 5173,
     proxy: {

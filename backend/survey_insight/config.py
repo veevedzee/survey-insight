@@ -31,8 +31,6 @@ class Settings:
         session_ttl_minutes: How long an uploaded survey stays in memory before it
             is deleted. Nothing is ever written to disk.
         sample_data_path: The bundled demo survey behind "Try with sample data".
-        load_model: Start loading the embedding model when the server starts
-            (turned off in tests, which use a small fake model).
     """
 
     allowed_origins: tuple[str, ...]
@@ -40,7 +38,6 @@ class Settings:
     max_upload_mb: int
     session_ttl_minutes: int
     sample_data_path: Path
-    load_model: bool
 
 
 def load_settings() -> Settings:
@@ -53,7 +50,6 @@ def load_settings() -> Settings:
         max_upload_mb=int(os.getenv("MAX_UPLOAD_MB", "10")),
         session_ttl_minutes=int(os.getenv("SESSION_TTL_MINUTES", "30")),
         sample_data_path=Path(os.getenv("SAMPLE_DATA_PATH", str(_DEFAULT_SAMPLE))),
-        load_model=os.getenv("LOAD_MODEL", "1") != "0",
     )
 
 

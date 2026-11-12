@@ -17,7 +17,8 @@ Flow of one analysis::
     GET  /api/sessions/{id}/cleaning                  -> data-quality checks
     POST /api/sessions/{id}/cleaning choose exclusions -> before/after counts
     GET  /api/sessions/{id}/stats                     -> statistics
-    GET  /api/sessions/{id}/themes                    -> themes in open-ended answers
+    GET  /api/sessions/{id}/texts                     -> answers for the browser to embed
+    POST /api/sessions/{id}/themes  answer vectors    -> themes in open-ended answers
     GET  /api/sessions/{id}/findings                  -> rule-based key findings
     GET  /api/sessions/{id}/export/csv                -> cleaned data download
     DELETE /api/sessions/{id}      forget everything now
@@ -25,12 +26,10 @@ Flow of one analysis::
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from dataclasses import asdict
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile
+from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from survey_insight import __version__
@@ -53,48 +52,30 @@ from survey_insight.schemas import (
     NormalizationOut,
     PrivacyReportOut,
     RemovedColumnOut,
+    TextsToEmbedOut,
+    ThemesRequest,
     UploadResponse,
 )
 from survey_insight.session_store import Session, SessionNotFound, SessionStore
 from survey_insight.stats import StatsReport, build_stats
 from survey_insight.text_themes import (
+    BROWSER_MODEL_ID,
     MODEL_NAME,
-    Embedder,
-    EmbeddingModel,
+    EmbeddingError,
+    PrecomputedEmbedder,
     ThemesReport,
     build_themes,
+    texts_to_embed,
 )
-
-embedding_model = EmbeddingModel()
-
-
-@asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    """Start loading the embedding model as soon as the server starts.
-
-    Loading takes a few seconds, so it runs in a background thread: the API
-    answers health checks and uploads immediately, and by the time a user
-    reaches the dashboard the model is usually ready.
-    """
-    if settings.load_model:
-        embedding_model.start_loading()
-    yield
-
-
-def get_embedder() -> Embedder:
-    """FastAPI dependency: the shared model (tests override this with a fake)."""
-    return embedding_model
-
 
 app = FastAPI(
     title="Survey Insight API",
     version=__version__,
     description="Upload a survey export and get cleaned data, statistics and themes.",
-    lifespan=lifespan,
 )
 
 # The frontend is served from a different origin (Vercel) than the API
-# (Hugging Face Spaces), so the browser needs explicit CORS permission.
+# (Render), so the browser needs explicit CORS permission.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(settings.allowed_origins),
@@ -254,19 +235,41 @@ def statistics(session_id: str) -> StatsReport:
     return session.stats
 
 
-@app.get("/api/sessions/{session_id}/themes", response_model=ThemesReport)
-def themes(session_id: str, embedder: Annotated[Embedder, Depends(get_embedder)]) -> ThemesReport:
-    """Themes, example quotes and (English-only) sentiment for every free-text column."""
+def _text_columns(session: Session) -> list[str]:
+    return [c for c, t in session.types.items() if t == ColumnType.TEXT]
+
+
+@app.get("/api/sessions/{session_id}/texts", response_model=TextsToEmbedOut)
+def texts_for_embedding(session_id: str) -> TextsToEmbedOut:
+    """Step 1 of themes: the answers the browser should turn into vectors.
+
+    Only distinct, non-filler answers of free-text columns are sent; they are
+    already anonymised, and the browser had them on screen anyway.
+    """
     session = _get_session(session_id)
     if session.analysis is None:
         raise HTTPException(409, "Apply the cleaning choices first.")
-    if session.themes is None:
-        text_cols = [c for c, t in session.types.items() if t == ColumnType.TEXT]
-        try:
-            session.themes = build_themes(session.analysis, text_cols, embedder,
-                                          getattr(embedder, "name", MODEL_NAME))
-        except RuntimeError as exc:  # model failed to load (e.g. no internet on first run)
-            raise HTTPException(503, f"Theme detection is unavailable: {exc}") from exc
+    return TextsToEmbedOut(
+        model=BROWSER_MODEL_ID,
+        columns=[{"column": c, "texts": texts_to_embed(session.analysis[c])}
+                 for c in _text_columns(session)],
+    )
+
+
+@app.post("/api/sessions/{session_id}/themes", response_model=ThemesReport)
+def themes(session_id: str, body: ThemesRequest) -> ThemesReport:
+    """Step 2 of themes: cluster the browser's vectors into labelled themes."""
+    session = _get_session(session_id)
+    if session.analysis is None:
+        raise HTTPException(409, "Apply the cleaning choices first.")
+    texts = [t for col in body.columns for t in col.texts]
+    vectors = [v for col in body.columns for v in col.vectors]
+    try:
+        embedder = PrecomputedEmbedder(texts, vectors)
+        session.themes = build_themes(session.analysis, _text_columns(session), embedder,
+                                      MODEL_NAME)
+    except EmbeddingError as exc:
+        raise HTTPException(422, f"Could not use the answer vectors: {exc}") from exc
     return session.themes
 
 

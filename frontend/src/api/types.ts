@@ -248,6 +248,17 @@ export interface ThemesReport {
   sentiment_note: string;
 }
 
+export interface TextsToEmbed {
+  model: string;
+  columns: { column: string; texts: string[] }[];
+}
+
+export interface EmbeddedColumn {
+  column: string;
+  texts: string[];
+  vectors: number[][];
+}
+
 export interface Finding {
   kind: "difference" | "relationship" | "reliability" | "agreement" | "theme" | "quality" | "custom";
   title: string;

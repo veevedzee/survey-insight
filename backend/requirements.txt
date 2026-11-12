@@ -1,4 +1,6 @@
 # Runtime dependencies. "~=" allows bug-fix updates but not breaking ones.
+# No PyTorch: the embedding model runs in the browser, which keeps this
+# server under the 512 MB of a free Render instance.
 fastapi~=0.162.5
 uvicorn[standard]~=0.54.0
 pydantic~=2.14
@@ -7,9 +9,5 @@ pandas~=3.1.1
 numpy~=2.5.4
 openpyxl~=3.1.5
 scipy~=1.18.1
-
-# Text themes. sentence-transformers pulls in PyTorch; the Dockerfile installs
-# the smaller CPU-only PyTorch build first (no GPU on free hosting).
 scikit-learn~=1.9.1
-sentence-transformers~=6.3.0
 vaderSentiment~=3.3.2

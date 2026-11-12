@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import os
-
 import numpy as np
 import pandas as pd
 import pytest
 
 from survey_insight.text_themes import (
+    EmbeddingError,
+    PrecomputedEmbedder,
     choose_k,
     ctfidf_keywords,
     find_themes,
@@ -18,6 +18,7 @@ from survey_insight.text_themes import (
     pick_quotes,
     silhouette_quality,
     summarise_sentiment,
+    texts_to_embed,
 )
 from tests.fakes import FakeEmbedder
 
@@ -137,14 +138,35 @@ def test_sentiment_scores_english_only() -> None:
     assert summarise_sentiment(["المواصلات وحشة جدا"]) is None
 
 
-@pytest.mark.skipif(os.getenv("RUN_SLOW") != "1", reason="set RUN_SLOW=1 to load the real model")
-def test_real_model_links_arabic_and_english() -> None:
-    from survey_insight.text_themes import EmbeddingModel
+def test_texts_to_embed_matches_what_clustering_uses() -> None:
+    series = pd.Series(ANSWERS + ANSWERS[:3], name="Q")  # 3 repeated answers
+    texts = texts_to_embed(series)
+    assert len(texts) == len(set(texts)) == len(ANSWERS) - 4  # distinct, no filler
+    # find_themes asks the embedder for exactly these texts, so browser vectors line up.
+    recorder = FakeEmbedder()
+    seen: list[str] = []
+    original = recorder.encode
+    recorder.encode = lambda t: (seen.extend(t), original(t))[1]  # type: ignore[method-assign]
+    find_themes(series, recorder)
+    assert seen == texts
 
-    model = EmbeddingModel()
-    commute_en, commute_ar, sport = model.encode([
-        "The commute to university takes too long",
-        "المواصلات للجامعة بتاخد وقت طويل",
-        "I enjoy playing football with my friends",
-    ])
-    assert commute_en @ commute_ar > commute_en @ sport
+
+def test_texts_to_embed_is_empty_for_tiny_columns() -> None:
+    assert texts_to_embed(pd.Series(["bus", "exam"], name="Q")) == []
+
+
+def test_precomputed_embedder_checks_and_normalises() -> None:
+    texts = ["a", "b"]
+    embedder = PrecomputedEmbedder(texts, [[3.0] + [0.0] * 383, [0.0, 2.0] + [0.0] * 382])
+    vectors = embedder.encode(["b", "a"])
+    assert np.allclose(np.linalg.norm(vectors, axis=1), 1)
+    assert vectors[0][1] == pytest.approx(1.0)
+
+    with pytest.raises(EmbeddingError, match="no vector"):
+        embedder.encode(["c"])
+    with pytest.raises(EmbeddingError, match="384"):
+        PrecomputedEmbedder(["a"], [[1.0, 2.0]])
+    with pytest.raises(EmbeddingError, match="vectors for"):
+        PrecomputedEmbedder(["a", "b"], [[0.0] * 384])
+    with pytest.raises(EmbeddingError, match="invalid"):
+        PrecomputedEmbedder(["a"], [[float("nan")] * 384])

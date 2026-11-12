@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { ApiError, getFindings, getThemes } from "../api/client";
+import { ApiError, getFindings } from "../api/client";
 import type { CleaningResult, Finding, StatsReport, ThemesReport } from "../api/types";
+import { computeThemes } from "../embedding/computeThemes";
+import { describeProgress, type EmbedProgress } from "../embedding/embeddings";
 import { ExportBar } from "./ExportBar";
 import { ComparisonCard, CorrelationCard } from "./stats/ComparisonCard";
 import { KeyFindings } from "./stats/KeyFindings";
@@ -33,22 +35,29 @@ export function DashboardStep({ sessionId, filename, result, stats, onEditCleani
   const [themes, setThemes] = useState<ThemesReport | null>(null);
   const [themesError, setThemesError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [progress, setProgress] = useState<EmbedProgress | null>(null);
 
   // Findings from the statistics come back instantly. Themes need the language
-  // model and take longer, so they load after, and then the findings are
-  // refreshed to include the top theme of each open-ended question.
+  // model, which runs in this browser, so they come after; then the findings
+  // are refreshed to include the top theme of each open-ended question.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const quick = await getFindings(sessionId);
         if (!cancelled) setFindings(quick);
-        const report = await getThemes(sessionId);
+        const report = await computeThemes(sessionId, (p) => !cancelled && setProgress(p));
         if (cancelled) return;
         setThemes(report);
         setFindings(await getFindings(sessionId));
       } catch (e) {
-        if (!cancelled) setThemesError(e instanceof ApiError ? e.message : "Theme detection failed.");
+        if (!cancelled) {
+          setThemesError(
+            e instanceof ApiError
+              ? e.message
+              : "Theme detection failed. The language model may not have downloaded; check your connection and reload.",
+          );
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -110,7 +119,13 @@ export function DashboardStep({ sessionId, filename, result, stats, onEditCleani
       <h3 className="section-title" id="themes">
         Themes in open-ended answers
       </h3>
-      <ThemesSection report={themes} loading={loading} error={themesError} />
+      <ThemesSection
+        report={themes}
+        loading={loading}
+        error={themesError}
+        status={describeProgress(progress)}
+        progress={progress && progress.total ? progress.done / progress.total : null}
+      />
 
       <div className="note note-info">
         {stats.notes.map((n) => (

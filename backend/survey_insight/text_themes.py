@@ -6,6 +6,9 @@ Pipeline for one free-text column
 2. **Embed**: a small multilingual sentence-transformers model turns each
    answer into a 384-number vector. Answers with similar *meaning* get nearby
    vectors, even across languages ("the commute is long" ~ "المواصلات بتاخد وقت").
+   The model runs **in the visitor's browser** (Transformers.js, ONNX version
+   of the same model); the browser sends only the vectors back. That keeps
+   this server small enough for a free 512 MB host.
 3. **Cluster**: k-means groups the vectors. The number of themes k is chosen
    automatically: we try k = 2..8 and keep the k with the best silhouette score
    (how much closer answers are to their own theme than to the next one).
@@ -17,14 +20,14 @@ Pipeline for one free-text column
    built for English; scoring Arabic with it would produce confident nonsense,
    so Arabic answers are counted but not scored.
 
-The embedding model is loaded once per process (see ``EmbeddingModel``) and
-reused for every request.
+Steps 1, 3-6 run here. ``texts_to_embed`` defines exactly which answers the
+browser must embed, and ``find_themes`` re-derives the same list, so the
+vectors line up with the answers.
 """
 
 from __future__ import annotations
 
 import re
-import threading
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -32,7 +35,10 @@ from typing import Protocol
 import numpy as np
 import pandas as pd
 
-MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+# The browser loads the ONNX conversion of this model from Hugging Face.
+MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
+BROWSER_MODEL_ID = "Xenova/paraphrase-multilingual-MiniLM-L12-v2"
+EMBEDDING_DIM = 384
 MAX_TEXTS = 2000  # larger columns are sampled to keep memory and time bounded
 MIN_TEXTS = 10  # fewer answers than this: no clustering, just list them
 MAX_THEMES = 8
@@ -62,7 +68,7 @@ ARABIC_STOPWORDS = {
 
 
 # --------------------------------------------------------------------------- #
-# The embedding model (loaded once, shared, swappable in tests)
+# Embeddings (computed in the browser, swappable in tests)
 # --------------------------------------------------------------------------- #
 class Embedder(Protocol):
     """Anything that turns texts into L2-normalised vectors (one row per text)."""
@@ -70,52 +76,36 @@ class Embedder(Protocol):
     def encode(self, texts: list[str]) -> np.ndarray: ...
 
 
-class EmbeddingModel:
-    """Lazy, thread-safe holder for the sentence-transformers model.
+class EmbeddingError(ValueError):
+    """The vectors sent by the browser don't match the answers they should describe."""
 
-    ``start_loading()`` is called when the API starts, so the ~470 MB model
-    loads in the background while the server already answers requests. The
-    first themes request waits for it if it is not ready yet.
+
+class PrecomputedEmbedder:
+    """Serves vectors the browser already computed, looked up by answer text.
+
+    The server never trusts that the browser sent the right thing: shapes are
+    checked, every requested answer must have a vector, and vectors are
+    re-normalised to length 1.
     """
 
-    def __init__(self, name: str = MODEL_NAME) -> None:
-        self.name = name
-        self._model = None
-        self._error: Exception | None = None
-        self._lock = threading.Lock()
-        self._ready = threading.Event()
-
-    @property
-    def ready(self) -> bool:
-        return self._ready.is_set()
-
-    @property
-    def error(self) -> Exception | None:
-        return self._error
-
-    def start_loading(self) -> None:
-        threading.Thread(target=self._load, name="load-embedding-model", daemon=True).start()
-
-    def _load(self) -> None:
-        with self._lock:
-            if self._model is not None or self._error is not None:
-                return
-            try:
-                from sentence_transformers import SentenceTransformer  # heavy import
-
-                self._model = SentenceTransformer(self.name, device="cpu")
-            except Exception as exc:  # network down, out of memory...
-                self._error = exc
-            finally:
-                self._ready.set()
+    def __init__(self, texts: list[str], vectors: list[list[float]]) -> None:
+        if len(texts) != len(vectors):
+            raise EmbeddingError(f"Got {len(vectors)} vectors for {len(texts)} answers.")
+        matrix = np.asarray(vectors, dtype=np.float32)
+        if matrix.ndim != 2 or (len(texts) and matrix.shape[1] != EMBEDDING_DIM):
+            raise EmbeddingError(f"Each vector must have {EMBEDDING_DIM} numbers.")
+        if not np.isfinite(matrix).all():
+            raise EmbeddingError("Vectors contain invalid numbers.")
+        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+        self._index = {t: i for i, t in enumerate(texts)}
+        self._matrix = matrix / np.where(norms == 0, 1, norms)
 
     def encode(self, texts: list[str]) -> np.ndarray:
-        if not self.ready:
-            self._load()
-        if self._model is None:
-            raise RuntimeError(f"Embedding model unavailable: {self._error}")
-        return np.asarray(self._model.encode(texts, batch_size=32, normalize_embeddings=True,
-                                             show_progress_bar=False))
+        missing = [t for t in texts if t not in self._index]
+        if missing:
+            example = missing[0][:40]
+            raise EmbeddingError(f"{len(missing)} answers have no vector, e.g. “{example}”.")
+        return self._matrix[[self._index[t] for t in texts]]
 
 
 # --------------------------------------------------------------------------- #
@@ -353,17 +343,33 @@ def pick_quotes(texts: list[str], vectors: np.ndarray, n: int = QUOTES_PER_THEME
     return chosen
 
 
-def find_themes(series: pd.Series, embedder: Embedder, seed: int = 0) -> ColumnThemes:
-    """Find themes in one free-text column."""
+def _useful_answers(series: pd.Series, seed: int = 0) -> tuple[list[str], list[str], bool]:
+    """All non-empty answers, the ones worth clustering, and whether we sampled.
+
+    Sampling uses a fixed seed, so calling this twice gives the same answers:
+    that's what lets the browser embed them and the server cluster them later.
+    """
     answers = [str(v).strip() for v in series.dropna() if str(v).strip()]
     useful = [t for t in answers if not is_filler(t)]
-    n_filler = len(answers) - len(useful)
-    notes: list[str] = []
-
     sampled = len(useful) > MAX_TEXTS
     if sampled:
         rng = np.random.default_rng(seed)
         useful = [useful[i] for i in sorted(rng.choice(len(useful), MAX_TEXTS, replace=False))]
+    return answers, useful, sampled
+
+
+def texts_to_embed(series: pd.Series, seed: int = 0) -> list[str]:
+    """The distinct answers the browser must turn into vectors for this column."""
+    _, useful, _ = _useful_answers(series, seed)
+    return list(dict.fromkeys(useful)) if len(useful) >= MIN_TEXTS else []
+
+
+def find_themes(series: pd.Series, embedder: Embedder, seed: int = 0) -> ColumnThemes:
+    """Find themes in one free-text column."""
+    answers, useful, sampled = _useful_answers(series, seed)
+    n_filler = len(answers) - len([t for t in answers if not is_filler(t)])
+    notes: list[str] = []
+    if sampled:
         notes.append(f"Large column: themes are based on a random sample of {MAX_TEXTS} answers.")
 
     base = ColumnThemes(str(series.name), len(answers), len(useful), n_filler, sampled, 0, None,

@@ -14,7 +14,8 @@ running survey data pipelines for university research and wanting a tool that do
 statistics properly instead of producing pie charts.
 
 **Live demo:** _https://YOUR-PROJECT.vercel.app_ (click **Try with sample data**; the free
-backend may need ~1 minute to wake up)
+backend may need ~1 minute to wake up, and the first visit downloads the language model to
+your browser)
 
 | Upload & column detection | Cleaning report |
 |---|---|
@@ -44,10 +45,10 @@ backend may need ~1 minute to wake up)
    reverse-wording warnings; group comparisons with the test chosen from the data type and
    checked assumptions; Spearman correlations; effect sizes and Holm-adjusted p-values
    everywhere, written up in plain English without overclaiming.
-5. **Text themes without paid AI.** A multilingual sentence-transformers model embeds
-   answers, k-means clusters them (k chosen by silhouette score), c-TF-IDF labels each
-   theme, and 3 diverse real quotes show what it contains. VADER sentiment for English
-   answers only, and the UI says so.
+5. **Text themes without paid AI.** A multilingual sentence model embeds answers **in the
+   visitor's browser** (Transformers.js), the server clusters them with k-means (k chosen by
+   silhouette score), c-TF-IDF labels each theme, and 3 diverse real quotes show what it
+   contains. VADER sentiment for English answers only, and the UI says so.
 6. **Dashboard.** Diverging stacked bars for Likert, sorted bars for choices, histograms for
    numbers, range plots and stacked bars for group comparisons, theme cards, and
    rule-based key findings. Every chart has a table view; colours are colour-blind-checked;
@@ -59,31 +60,36 @@ backend may need ~1 minute to wake up)
 
 | Layer | Tools |
 |---|---|
-| Backend | Python 3.12, FastAPI, pandas, NumPy, SciPy, scikit-learn |
-| Text | sentence-transformers (`paraphrase-multilingual-MiniLM-L12-v2`), VADER |
+| Backend | Python 3.12, FastAPI, pandas, NumPy, SciPy, scikit-learn, VADER |
+| Text model | `paraphrase-multilingual-MiniLM-L12-v2` (ONNX, 8-bit) via Transformers.js in a Web Worker |
 | Frontend | React 19, TypeScript, Vite, Recharts |
 | Tests | pytest (+ coverage), Vitest, React Testing Library, ruff |
-| Hosting | Vercel (frontend), Hugging Face Spaces Docker (backend), GitHub Actions (CI) — all free |
+| Hosting | Vercel (frontend), Render free web service (backend), GitHub Actions (CI) — all free |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    U([Browser]) -->|React app| V[Vercel<br/>static frontend]
-    U -->|JSON over HTTPS| A
+    subgraph B[Visitor's browser]
+        UI[React app<br/>from Vercel] --> W[Web Worker<br/>Transformers.js<br/>multilingual model]
+    end
+    UI -->|JSON over HTTPS| A
 
-    subgraph HF[Hugging Face Space: Docker, CPU]
+    subgraph R[Render free web service, ~200 MB RAM]
         A[FastAPI<br/>api.py] --> L[loading.py<br/>read file, detect types]
         A --> P[privacy.py<br/>drop and mask personal data]
         A --> C[cleaning.py<br/>quality flags]
         A --> S[stats.py<br/>tests, effect sizes, Holm]
-        A --> T[text_themes.py<br/>embed, cluster, label]
+        A --> T[text_themes.py<br/>cluster, label, quote]
         A --> F[findings.py<br/>rule-based summary]
         A --> E[exporting.py<br/>cleaned CSV]
-        T --> M[(Multilingual<br/>embedding model<br/>loaded once)]
-        A --> R[(In-memory sessions<br/>30-min expiry)]
+        A --> M[(In-memory sessions<br/>30-min expiry)]
     end
+    W -. "answer vectors (384 numbers each)" .-> T
 ```
+
+Themes take three steps: the browser asks `GET /texts` which answers to embed, embeds them
+locally, and sends only the vectors to `POST /themes`, where they are clustered and labelled.
 
 Data flows one way through the pipeline:
 
@@ -112,8 +118,7 @@ pip install -r requirements-dev.txt
 uvicorn survey_insight.api:app --reload --port 8000
 ```
 
-The first run downloads the embedding model (~470 MB) in the background. API docs:
-http://127.0.0.1:8000/docs
+API docs: http://127.0.0.1:8000/docs
 
 ```bash
 # Frontend (from frontend/), in a second terminal
@@ -121,7 +126,8 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173 and click **Try with sample data**.
+Open http://localhost:5173 and click **Try with sample data**. The first time themes are
+computed, the browser downloads the language model (~135 MB) and caches it.
 
 The sample survey is synthetic (300 students, study habits and wellbeing, with planted
 effects and deliberately messy rows). Regenerate it with `python sample_data/generate_sample.py`.
@@ -129,15 +135,15 @@ effects and deliberately messy rows). Regenerate it with `python sample_data/gen
 ## Run tests
 
 ```bash
-cd backend && pytest --cov=survey_insight      # 114 tests, ~94% coverage
+cd backend && pytest --cov=survey_insight      # ~115 tests, ~94% coverage
 cd frontend && npm test                         # component and unit tests
 ```
 
 Statistical functions are tested against hand-computed answers (e.g. Cronbach's α = 2/3,
 Cramér's V = 1/3, Holm-adjusted p = [.03, .06, .06]); clustering is tested on fixed vectors
-with a fake embedder so tests never download a model. `RUN_SLOW=1 pytest` also runs a test
-with the real model, checking that an English sentence and its Arabic paraphrase land
-closer together than an unrelated sentence.
+from a fake embedder whose right answer is known, and the browser-to-server vector exchange
+is tested end to end (including malformed or missing vectors). CI also starts the server and
+checks it stays under Render's memory limit.
 
 ## Design decisions
 
@@ -174,12 +180,16 @@ types are confirmed. Known limitation: names written inside answers are only cau
 same name appears in a name column, since general name recognition (especially in Arabic)
 needs a heavier model than free hosting allows.
 
-**Zero-cost hosting.** The backend needs ~1 GB of RAM once the embedding model is loaded, so
-Render's free tier (512 MB) would crash. A **Hugging Face Space** (Docker, free CPU tier with
-16 GB RAM) fits, and the image uses CPU-only PyTorch and has the model baked in so cold starts
-don't download it. The frontend is static files on **Vercel**. CI on **GitHub Actions** runs
-the tests and builds the Docker image. The trade-off: free Spaces sleep after inactivity, so
-the first request after a while waits for a cold start.
+**Zero-cost hosting, by moving the model to the browser.** With the embedding model on the
+server (PyTorch + sentence-transformers) the backend needed ~910 MB of RAM, too much for any
+free host that doesn't require a credit card (Hugging Face stopped offering free Docker Spaces
+in 2026; Render's free tier has 512 MB). So the model runs in the visitor's browser instead:
+Transformers.js loads the ONNX, 8-bit version of the same model in a Web Worker (~135 MB,
+downloaded once and cached), and only the vectors go to the server. The backend dropped to
+~200 MB and runs on **Render's free tier**; the frontend is static files on **Vercel**.
+Trade-offs: the first visit downloads the model, embedding ~350 answers takes ~30 s on a
+laptop, and free Render services sleep after 15 minutes idle, so the first request then waits
+about a minute.
 
 **Smaller choices.** Rule-based column detection (every guess has a reason the user can fix);
 IQR outlier fences instead of z-scores (the mean and SD are pulled by the very outliers being
@@ -209,10 +219,14 @@ These were left as exercises while building the project. <!-- Fill in as you com
   dropped, to catch re-submissions with different answers.
 - **Weighting** for unrepresentative samples, and confidence intervals on every estimate.
 - **Shareable reports** stored temporarily with an expiring link.
+- **Faster in-browser embedding**: WebGPU where available, or multi-threaded WebAssembly via
+  cross-origin isolation headers.
+- **Fully client-side mode** with Pyodide (Python in the browser), so surveys never leave the
+  visitor's device and no server is needed at all.
 
 ## Deployment
 
-Step-by-step free deployment (Hugging Face Spaces + Vercel): see [DEPLOYMENT.md](DEPLOYMENT.md).
+Step-by-step free deployment (Render + Vercel): see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## License
 

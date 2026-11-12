@@ -1,0 +1,19 @@
+# Render Blueprint: the backend as a free Python web service.
+# In Render: New + -> Blueprint -> pick this repository. See DEPLOYMENT.md.
+services:
+  - type: web
+    name: survey-insight-api
+    runtime: python
+    plan: free
+    # Python version comes from .python-version at the repository root.
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn survey_insight.api:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      # Your Vercel URL, e.g. https://survey-insight.vercel.app (asked for on first deploy).
+      - key: ALLOWED_ORIGINS
+        sync: false
+      # Optional: allow Vercel preview deployments, e.g. https://survey-insight-.*\.vercel\.app
+      - key: ALLOWED_ORIGIN_REGEX
+        sync: false

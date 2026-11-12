@@ -104,6 +104,32 @@ class CleaningResultOut(BaseModel):
     applied: list[str]
 
 
+class ColumnTexts(BaseModel):
+    """The distinct answers of one free-text column that need a vector."""
+
+    column: str
+    texts: list[str]
+
+
+class TextsToEmbedOut(BaseModel):
+    """What the browser should embed, and with which model."""
+
+    model: str
+    columns: list[ColumnTexts]
+
+
+class EmbeddedColumn(BaseModel):
+    """Answers of one column with the vector the browser computed for each."""
+
+    column: str
+    texts: list[str]
+    vectors: list[list[float]]
+
+
+class ThemesRequest(BaseModel):
+    columns: list[EmbeddedColumn]
+
+
 class PrivacyReportOut(BaseModel):
     """What the privacy step removed before any analysis."""
 

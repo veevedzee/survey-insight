@@ -4,7 +4,9 @@ import type {
   CleaningReport,
   CleaningResult,
   ColumnType,
+  EmbeddedColumn,
   Finding,
+  TextsToEmbed,
   HealthResponse,
   PrivacyReport,
   StatsReport,
@@ -85,8 +87,18 @@ export function getStats(sessionId: string): Promise<StatsReport> {
   return request<StatsReport>(`/api/sessions/${sessionId}/stats`);
 }
 
-export function getThemes(sessionId: string): Promise<ThemesReport> {
-  return request<ThemesReport>(`/api/sessions/${sessionId}/themes`);
+/** Step 1 of themes: which answers the browser should embed, and with which model. */
+export function getTextsToEmbed(sessionId: string): Promise<TextsToEmbed> {
+  return request<TextsToEmbed>(`/api/sessions/${sessionId}/texts`);
+}
+
+/** Step 2 of themes: send the browser-computed vectors; get labelled themes back. */
+export function postThemes(sessionId: string, columns: EmbeddedColumn[]): Promise<ThemesReport> {
+  return request<ThemesReport>(`/api/sessions/${sessionId}/themes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ columns }),
+  });
 }
 
 export function getFindings(sessionId: string): Promise<Finding[]> {

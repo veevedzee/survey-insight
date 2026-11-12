@@ -1,196 +1,120 @@
 # Deploying Survey Insight for free
 
-Total cost: **$0**. You need three free accounts: **GitHub**, **Hugging Face** and **Vercel**.
-Total time: about 30–40 minutes, most of it waiting for the first backend build.
+Total cost: **$0**. You need three free accounts: **GitHub** (done), **Render** and **Vercel**.
+Total time: about 20 minutes.
 
 ```
-GitHub repo ──► Vercel (frontend, rebuilds on every push)
-     │
-     └─ copy of backend ──► Hugging Face Space (Docker backend)
+GitHub repo ──► Render  (backend: Python web service, rebuilds on every push)
+            └─► Vercel  (frontend: static site, rebuilds on every push)
+
+The language model runs in each visitor's browser, so neither host needs a GPU or lots of RAM.
 ```
 
-Replace these placeholders as you go:
-
-| Placeholder | Example |
-|---|---|
-| `YOUR_GITHUB_USERNAME` | `ahmedsherif` |
-| `YOUR_HF_USERNAME` | `ahmedsherif` |
-| `YOUR_VERCEL_URL` | `https://survey-insight.vercel.app` |
+Why this setup: with the model on the server, the backend needed ~910 MB of RAM, and free
+hosts without a credit card offer 512 MB (Hugging Face no longer offers free Docker Spaces).
+Moving the model into the browser brought the backend down to ~200 MB.
 
 ---
 
-## Step 0: Check your git identity
+## Step 1: Deploy the backend on Render
 
-Every commit shows a name and email on GitHub. Check them:
+The repository contains a **`render.yaml`** "Blueprint" that tells Render exactly how to build
+and run the backend, so you mostly click through.
 
-```bash
-git config --global user.name
-```
+1. Go to **dashboard.render.com** → **New +** → **Blueprint**.
+2. **Connect GitHub** when asked and give Render access to the `survey-insight` repository
+   (you can limit access to just that repository).
+3. Select **veevedzee/survey-insight**. Render reads `render.yaml` and shows one service,
+   **survey-insight-api**, on the **Free** plan.
+4. It asks for the environment variables marked as "set on deploy":
 
-```bash
-git config --global user.email
-```
+   | Name | Value for now |
+   |---|---|
+   | `ALLOWED_ORIGINS` | `http://localhost:5173` (you'll replace it with your Vercel URL in step 3) |
+   | `ALLOWED_ORIGIN_REGEX` | leave empty |
 
-To change them (use the email of your GitHub account, or GitHub's private
-`ID+username@users.noreply.github.com` address from GitHub → Settings → Emails):
+5. Click **Apply** / **Deploy Blueprint**. The first build takes ~3–5 minutes (installing
+   pandas, SciPy, scikit-learn). Watch the **Logs** tab; it ends with
+   `Uvicorn running on http://0.0.0.0:...`.
+6. Open the service. Its URL is shown at the top, usually
+   **`https://survey-insight-api.onrender.com`** (Render adds a suffix if the name is taken).
+   Check it works:
 
-```bash
-git config --global user.name "Ahmed Sherif"
-```
+   `https://survey-insight-api.onrender.com/api/health` → `{"status":"ok","version":"0.1.0"}`
 
-```bash
-git config --global user.email "you@example.com"
-```
+   The interactive API docs are at `/docs`.
 
-Commits already made keep their old author. That's fine for a portfolio, but if you want
-them updated, ask before rewriting history.
+## Step 2: Deploy the frontend on Vercel
 
-## Step 1: Put the code on GitHub
-
-1. On github.com click **New repository**. Name: `survey-insight`, **Public**, and do *not*
-   add a README, .gitignore or license (the project already has them).
-2. In a terminal inside the `survey-insight` folder:
-
-```bash
-git remote add origin https://github.com/YOUR_GITHUB_USERNAME/survey-insight.git
-```
-
-```bash
-git push -u origin main
-```
-
-3. Open the **Actions** tab on GitHub. The **CI** workflow runs the backend tests, the
-   frontend tests and a Docker build of the backend. The first run takes ~10 minutes because
-   the Docker job downloads PyTorch and the model. A green tick means the image the Space
-   will build is known to work.
-
-## Step 2: Deploy the backend on Hugging Face Spaces
-
-Why Hugging Face and not Render: once the embedding model is loaded the backend uses about
-1 GB of memory. Render's free tier has 512 MB; a free CPU Space has 16 GB.
-
-1. **Create the Space.** On huggingface.co: your avatar → **New Space**.
-   - Space name: `survey-insight-api`
-   - License: MIT
-   - SDK: **Docker** → template **Blank**
-   - Hardware: **CPU basic · free**
-   - Visibility: **Public**
-
-2. **Create an access token** (used instead of a password when pushing): avatar →
-   **Settings → Access Tokens → Create new token** → type **Write** → copy it somewhere safe.
-   Never commit it or paste it into code.
-
-3. **Clone the empty Space next to the project folder** (from the folder that *contains*
-   `survey-insight`):
-
-```bash
-git clone https://huggingface.co/spaces/YOUR_HF_USERNAME/survey-insight-api
-```
-
-4. **Copy the backend files into it** (from inside `survey-insight`, in PowerShell):
-
-```powershell
-.\deploy\huggingface\prepare_space.ps1 -SpaceDir ..\survey-insight-api
-```
-
-   This copies only what the Space needs: `Dockerfile`, `backend/` code and requirements, the
-   sample CSV, and a Space `README.md` whose header tells Hugging Face to use Docker on port 7860.
-
-5. **Push to the Space:**
-
-```bash
-cd ..\survey-insight-api
-```
-
-```bash
-git add -A
-```
-
-```bash
-git commit -m "Deploy Survey Insight API"
-```
-
-```bash
-git push
-```
-
-   When asked, the username is your Hugging Face username and the password is the
-   **access token** from step 2.
-
-6. **Wait for the build** (about 5–10 minutes). Watch the Space's **Logs** tab. When the status
-   is **Running**, open:
-
-   `https://YOUR_HF_USERNAME-survey-insight-api.hf.space/api/health`
-
-   You should see `{"status":"ok","version":"0.1.0"}`. The interactive docs are at `/docs`.
-
-   (The Space URL is your username and Space name joined by `-`, in lower case. If yours
-   differs, use the one shown under the Space's **⋮ → Embed this Space** menu.)
-
-## Step 3: Deploy the frontend on Vercel
-
-1. On vercel.com: **Add New… → Project → Import** your `survey-insight` GitHub repository.
+1. Go to **vercel.com** → sign in with GitHub → **Add New… → Project** → **Import**
+   `veevedzee/survey-insight`.
 2. Settings:
-   - **Root Directory:** `frontend`
+   - **Root Directory:** `frontend` (click *Edit* next to it)
    - Framework preset: **Vite** (detected automatically)
    - Build command `npm run build`, output directory `dist` (the defaults)
 3. **Environment Variables:** add
 
    | Name | Value |
    |---|---|
-   | `VITE_API_URL` | `https://YOUR_HF_USERNAME-survey-insight-api.hf.space` |
+   | `VITE_API_URL` | your Render URL, e.g. `https://survey-insight-api.onrender.com` (no trailing slash) |
 
-   (No trailing slash. Vite bakes this into the build, so if you change it later,
-   redeploy.)
-4. Click **Deploy**. After about a minute you get `YOUR_VERCEL_URL`.
+4. Click **Deploy**. After about a minute you get your site URL, e.g.
+   **`https://survey-insight.vercel.app`**. (Vite bakes `VITE_API_URL` into the build: if you
+   change it later, redeploy.)
 
-## Step 4: Allow the frontend to call the backend (CORS)
+## Step 3: Allow the frontend to call the backend (CORS)
 
-Browsers block a page on one domain from calling an API on another unless the API says the
-page is allowed. Tell the backend about your Vercel URL:
+Browsers block a page on one domain (vercel.app) from reading an API on another (onrender.com)
+unless the API says that page is allowed.
 
-1. In the Space: **Settings → Variables and secrets → New variable**
+1. In Render: open **survey-insight-api** → **Environment**.
+2. Set `ALLOWED_ORIGINS` to your Vercel URL, e.g. `https://survey-insight.vercel.app`
+   (exact match: `https`, no trailing slash). To keep local development working too, use
+   both, separated by a comma: `https://survey-insight.vercel.app,http://localhost:5173`
+3. Optional, for Vercel preview deployments: `ALLOWED_ORIGIN_REGEX` =
+   `https://survey-insight-.*\.vercel\.app`
+4. **Save changes**. Render redeploys automatically (~1 minute).
 
-   | Name | Value |
-   |---|---|
-   | `ALLOWED_ORIGINS` | `YOUR_VERCEL_URL` (e.g. `https://survey-insight.vercel.app`, no trailing slash) |
-   | `ALLOWED_ORIGIN_REGEX` *(optional)* | `https://survey-insight-.*\.vercel\.app` (allows Vercel preview deployments) |
+## Step 4: Check it end to end
 
-2. The Space restarts automatically. If not: **Settings → Factory rebuild** or **Restart**.
+Open your Vercel URL:
 
-## Step 5: Check it end to end
+1. The badge in the top-right says **Server online** (if it says offline, wait a minute: the
+   free Render service may be waking up).
+2. **Try with sample data** → Confirm → Continue to cleaning → Apply and continue.
+3. Under *Themes*, the page downloads the language model to your browser the first time
+   (~135 MB, progress shown), then reads the answers on your device. Later visits use the
+   cached model.
+4. Download the CSV and the HTML report.
 
-Open `YOUR_VERCEL_URL`. The badge in the top-right should say **Server online**. Click
-**Try with sample data** and go through every step to the dashboard; themes appear after a few
-seconds. Download the CSV and the HTML report.
+## Step 5: Finish the README
 
-## Step 6: Finish the README
-
-- Replace `YOUR_GITHUB_USERNAME` (CI badge) and the live demo link.
-- Add screenshots to `docs/screenshots/` with the names the README uses
-  (`upload.png`, `cleaning.png`, `themes.png`, `charts.png`), or record a short GIF.
+- Replace the live demo link (`https://YOUR-PROJECT.vercel.app`) with your Vercel URL.
+- Add screenshots to `docs/screenshots/` (`upload.png`, `cleaning.png`, `themes.png`,
+  `charts.png`), or record a short GIF.
 - Tick off the "Parts I implemented myself" list as you complete the TODOs.
-- Commit and push; Vercel redeploys automatically.
+- Commit and push: Render and Vercel both redeploy automatically.
 
 ## Updating later
 
-- **Frontend:** push to GitHub; Vercel rebuilds on every push to `main`.
-- **Backend:** run `prepare_space.ps1` again and push the Space repo. (A possible next step is
-  a GitHub Action that syncs the Space automatically using an `HF_TOKEN` secret.)
+Push to `main` on GitHub. Render rebuilds the backend and Vercel rebuilds the frontend
+automatically. GitHub Actions runs the tests on every push.
 
 ## Troubleshooting
 
 | Symptom | Likely cause and fix |
 |---|---|
-| Badge says **Server offline** | Free Spaces sleep after ~48 h without visits. Open the Space page to wake it; the first request takes ~1 minute. |
-| Browser console shows a **CORS** error | `ALLOWED_ORIGINS` doesn't exactly match the page's origin (check `https`, no trailing slash, the exact Vercel domain). |
-| Everything works locally but not on Vercel | `VITE_API_URL` missing or wrong; fix it in Vercel and **redeploy**. |
-| Space build fails | Read the **Logs** tab. If the CI Docker job on GitHub is green, the Dockerfile itself works; check that `prepare_space.ps1` copied all files. |
-| Themes show "unavailable" | The model failed to load; check the Space logs for memory or download errors. |
+| Badge says **Server offline** | Free Render services sleep after 15 minutes without traffic. The first request wakes it (~1 minute); reload the page. |
+| Browser console shows a **CORS** error | `ALLOWED_ORIGINS` on Render doesn't exactly match the page's address (check `https`, no trailing slash, the exact Vercel domain). |
+| Works locally but not on Vercel | `VITE_API_URL` missing or wrong in Vercel; fix it and **redeploy**. |
+| Themes say the model didn't download | The visitor's network blocked or interrupted the download from huggingface.co; reload to retry. Statistics and findings still work without themes. |
+| Render build fails | Read the build log. The same install runs in GitHub Actions (CI tab), so a green CI means the requirements install cleanly. |
+| "Session has expired" | Sessions live 30 minutes in memory, and a sleeping/restarted server forgets them. Upload again. |
 
 ## Free-tier limits worth knowing
 
-- **Hugging Face Spaces (CPU basic):** 2 vCPU, 16 GB RAM, sleeps when unused, public by default.
+- **Render Free:** 512 MB RAM, sleeps after 15 minutes idle, 750 free instance hours a month
+  (enough for one always-available service).
 - **Vercel Hobby:** generous bandwidth for a portfolio project; non-commercial use.
 - **GitHub Actions:** free for public repositories.
-- Uploaded surveys live only in the backend's memory, so a Space restart clears every session.
+- **Hugging Face Hub:** serves the model files to visitors' browsers for free.
