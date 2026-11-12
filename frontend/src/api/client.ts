@@ -93,6 +93,20 @@ export function getFindings(sessionId: string): Promise<Finding[]> {
   return request<Finding[]>(`/api/sessions/${sessionId}/findings`);
 }
 
+/** The cleaned CSV as a file blob, plus the server's suggested file name. */
+export async function downloadCleanedCsv(sessionId: string): Promise<{ blob: Blob; filename: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/api/sessions/${sessionId}/export/csv`);
+  } catch {
+    throw new ApiError("Can't reach the server.", 0);
+  }
+  if (!response.ok) throw new ApiError("The export failed. Please try again.", response.status);
+  const header = response.headers.get("Content-Disposition") ?? "";
+  const filename = header.match(/filename="([^"]+)"/)?.[1] ?? "survey-cleaned.csv";
+  return { blob: await response.blob(), filename };
+}
+
 export function deleteSession(sessionId: string): Promise<void> {
   return request<void>(`/api/sessions/${sessionId}`, { method: "DELETE" });
 }

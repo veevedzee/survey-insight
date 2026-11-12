@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiError, getFindings, getThemes } from "../api/client";
 import type { CleaningResult, Finding, StatsReport, ThemesReport } from "../api/types";
+import { ExportBar } from "./ExportBar";
 import { ComparisonCard, CorrelationCard } from "./stats/ComparisonCard";
 import { KeyFindings } from "./stats/KeyFindings";
 import { QuestionCharts } from "./stats/QuestionCharts";
@@ -9,6 +10,7 @@ import { ThemesSection } from "./stats/ThemeCards";
 
 interface Props {
   sessionId: string;
+  filename: string;
   result: CleaningResult;
   stats: StatsReport;
   onEditCleaning: () => void;
@@ -24,7 +26,8 @@ const SECTIONS = [
   { id: "questions", label: "All questions" },
 ];
 
-export function DashboardStep({ sessionId, result, stats, onEditCleaning, onBack }: Props) {
+export function DashboardStep({ sessionId, filename, result, stats, onEditCleaning, onBack }: Props) {
+  const dashboardRef = useRef<HTMLElement>(null);
   const [showAll, setShowAll] = useState(false);
   const [findings, setFindings] = useState<Finding[] | null>(null);
   const [themes, setThemes] = useState<ThemesReport | null>(null);
@@ -60,14 +63,24 @@ export function DashboardStep({ sessionId, result, stats, onEditCleaning, onBack
   const correlations = showAll ? stats.correlations : sigCorrelations;
 
   return (
-    <section className="dashboard">
-      <div className="section-head">
-        <h2>Results</h2>
-        <p className="muted">
-          Based on the {result.n_after} responses kept after cleaning (
-          {result.n_before - result.n_after} excluded, {result.n_values_blanked} outlier values
-          cleared).
-        </p>
+    <section className="dashboard" ref={dashboardRef}>
+      <div className="section-head results-head">
+        <div>
+          <h2>Results</h2>
+          <p className="muted">
+            Based on the {result.n_after} responses kept after cleaning (
+            {result.n_before - result.n_after} excluded, {result.n_values_blanked} outlier values
+            cleared).
+          </p>
+        </div>
+        <ExportBar
+          sessionId={sessionId}
+          filename={filename}
+          nResponses={result.n_after}
+          nExcluded={result.n_before - result.n_after}
+          dashboardRef={dashboardRef}
+          reportReady={!loading}
+        />
       </div>
 
       <div className="stat-row">

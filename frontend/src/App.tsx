@@ -170,6 +170,7 @@ export default function App() {
         return (
           <DashboardStep
             sessionId={wizard.upload.session_id}
+            filename={wizard.upload.filename}
             result={wizard.result}
             stats={wizard.stats}
             onBack={startOver}

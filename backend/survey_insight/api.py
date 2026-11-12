@@ -19,6 +19,7 @@ Flow of one analysis::
     GET  /api/sessions/{id}/stats                     -> statistics
     GET  /api/sessions/{id}/themes                    -> themes in open-ended answers
     GET  /api/sessions/{id}/findings                  -> rule-based key findings
+    GET  /api/sessions/{id}/export/csv                -> cleaned data download
     DELETE /api/sessions/{id}      forget everything now
 """
 
@@ -29,12 +30,13 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from survey_insight import __version__
 from survey_insight.cleaning import apply_cleaning, build_report
 from survey_insight.config import settings
+from survey_insight.exporting import cleaned_table, export_filename, to_csv_bytes
 from survey_insight.findings import Finding, build_findings
 from survey_insight.loading import ColumnType, SurveyFileError, profile_columns, read_survey
 from survey_insight.privacy import anonymize
@@ -98,6 +100,8 @@ app.add_middleware(
     allow_origins=list(settings.allowed_origins),
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
+    # Lets the browser read the download's file name across origins.
+    expose_headers=["Content-Disposition"],
 )
 
 store = SessionStore(ttl_seconds=settings.session_ttl_minutes * 60)
@@ -269,6 +273,23 @@ def findings(session_id: str) -> list[Finding]:
         session.stats = build_stats(session.analysis, session.types, session.profiles)
     n_excluded = len(session.data) - len(session.analysis)
     return build_findings(session.stats, session.themes, n_excluded)
+
+
+@app.get("/api/sessions/{session_id}/export/csv")
+def export_csv(session_id: str) -> Response:
+    """Download the cleaned, anonymised data (with scale scores) as CSV."""
+    session = _get_session(session_id)
+    if session.analysis is None:
+        raise HTTPException(409, "Apply the cleaning choices first.")
+    if session.stats is None:
+        session.stats = build_stats(session.analysis, session.types, session.profiles)
+    table = cleaned_table(session.analysis, session.stats, session.profiles)
+    filename = export_filename(session.filename, "cleaned.csv")
+    return Response(
+        content=to_csv_bytes(table),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.delete("/api/sessions/{session_id}", status_code=204)
