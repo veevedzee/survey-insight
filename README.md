@@ -18,11 +18,27 @@ whole analysis runs in your browser (Python via Pyodide), so your survey never l
 device. Click **Try with sample data**. The first visit downloads Python (~40 MB) and the
 language model (~135 MB); later visits load from cache.
 
-| Upload & column detection | Cleaning report |
+**Key findings**, written by rules from the statistics, each with the test behind it:
+
+![Key findings](docs/screenshots/findings.png)
+
+**Themes in open-ended answers**: Arabic and English answers with the same meaning are grouped
+together, labelled, and shown with real quotes:
+
+![Themes](docs/screenshots/themes.png)
+
+| Column detection with reasons | Cleaning report with live before/after counts |
 |---|---|
-| ![Upload screen](docs/screenshots/upload.png) | ![Cleaning report](docs/screenshots/cleaning.png) |
-| **Key findings & themes** | **Charts** |
-| ![Findings and themes](docs/screenshots/themes.png) | ![Dashboard charts](docs/screenshots/charts.png) |
+| ![Column detection](docs/screenshots/columns.png) | ![Cleaning report](docs/screenshots/cleaning.png) |
+| **Group comparison with the test explained** | **Diverging bars for a Likert grid** |
+| ![Group comparison](docs/screenshots/comparison.png) | ![Likert chart](docs/screenshots/charts.png) |
+
+<details>
+<summary>Upload screen</summary>
+
+![Upload screen](docs/screenshots/upload.png)
+
+</details>
 
 
 ## Features
@@ -137,7 +153,7 @@ effects and deliberately messy rows). Regenerate it with `python sample_data/gen
 ## Run tests
 
 ```bash
-cd backend && pytest --cov=survey_insight      # ~115 tests, ~94% coverage
+cd backend && pytest --cov=survey_insight      # 124 tests, ~96% coverage
 cd frontend && npm test                         # component and unit tests
 ```
 
