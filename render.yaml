@@ -1,5 +1,5 @@
 # Render Blueprint: the backend as a free Python web service.
-# In Render: New + -> Blueprint -> pick this repository. See DEPLOYMENT.md.
+# Optional server mode; the hosted demo runs entirely in the browser instead.
 services:
   - type: web
     name: survey-insight-api

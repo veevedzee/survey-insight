@@ -235,10 +235,6 @@ there is one implementation of each chart.
 - **Offline support** with a service worker, so the app works without internet after the
   first visit.
 
-## Deployment
-
-Free deployment on GitHub Pages (one setting to switch on): see [DEPLOYMENT.md](DEPLOYMENT.md).
-
 ## License
 
 [MIT](LICENSE)
