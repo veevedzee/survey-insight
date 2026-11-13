@@ -10,8 +10,8 @@ from survey_insight.findings import (
     build_findings,
     difference_score,
     is_demographic,
-    rule_custom,
     rule_group_differences,
+    rule_top_choices,
 )
 from survey_insight.loading import ColumnProfile, ColumnType
 from survey_insight.stats import Comparison, build_stats
@@ -75,7 +75,10 @@ def test_demographic_by_demographic_is_ranked_lower() -> None:
         difference_score(comparison("Average hours of sleep per night", "Year of study"))
 
 
-@pytest.mark.xfail(reason="TODO(you): implement rule_custom in findings.py", strict=False)
-def test_custom_rule(stats) -> None:
-    findings = rule_custom(stats)
-    assert any(f.kind == "custom" and "Notes" in f.text for f in findings)
+def test_top_choices_rule(stats) -> None:
+    findings = rule_top_choices(stats)
+    assert len(findings) == 1  # one multiple-choice question
+    finding = findings[0]
+    assert finding.kind == "choice"
+    # "Notes" appears in all three answer options, so every respondent picked it.
+    assert "“Notes” (100% of respondents), followed by" in finding.text

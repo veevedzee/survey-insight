@@ -24,9 +24,6 @@ language model (~135 MB); later visits load from cache.
 | **Key findings & themes** | **Charts** |
 | ![Findings and themes](docs/screenshots/themes.png) | ![Dashboard charts](docs/screenshots/charts.png) |
 
-<!-- Screenshot tips: run the sample data, take 4 screenshots at ~1280px wide and save them
-     with the names above in docs/screenshots/. A 20-second GIF of the full flow (e.g. with
-     ScreenToGif, free) works even better at the top of this README. -->
 
 ## Features
 
@@ -204,15 +201,6 @@ detected); straight-lining only flagged when *every* grid is flat; charts chosen
 comparisons use lengths on a common baseline; HTML report snapshotted from the dashboard so
 there is one implementation of each chart.
 
-## Parts I implemented myself
-
-These were left as exercises while building the project. <!-- Fill in as you complete them -->
-
-- [ ] Arabic Likert labels for automatic detection (`backend/survey_insight/loading.py`)
-- [ ] Speeder cut-off relative to the median completion time (`cleaning.py`)
-- [ ] "Negligible" effect-size category (`stats.py`)
-- [ ] A custom key-finding rule (`findings.py`)
-- [ ] Plain-English sentiment badge (`frontend/src/components/stats/SentimentBadge.tsx`)
 
 ## What I'd add next
 

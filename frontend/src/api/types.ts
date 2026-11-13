@@ -260,7 +260,7 @@ export interface EmbeddedColumn {
 }
 
 export interface Finding {
-  kind: "difference" | "relationship" | "reliability" | "agreement" | "theme" | "quality" | "custom";
+  kind: "difference" | "relationship" | "reliability" | "agreement" | "theme" | "choice" | "quality";
   title: string;
   text: string;
   importance: number;

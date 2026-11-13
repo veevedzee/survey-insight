@@ -36,7 +36,7 @@ class Finding:
     """One key finding.
 
     Attributes:
-        kind: difference | relationship | reliability | agreement | theme | quality | custom
+        kind: difference | relationship | reliability | agreement | theme | choice | quality
         title: A few words for the card heading.
         text: The full plain-English sentence.
         importance: Used for ordering (higher first).
@@ -181,18 +181,26 @@ def rule_top_themes(themes: ThemesReport | None) -> list[Finding]:
     return findings
 
 
-def rule_custom(stats: StatsReport) -> list[Finding]:
-    """TODO(you): write one finding rule of your own.
+def rule_top_choices(stats: StatsReport) -> list[Finding]:
+    """The most selected options of each multiple-choice question.
 
-    Suggested: for each multiple-choice question, report its most selected
-    option, e.g. "The most used study method is Lecture notes (80% of
-    respondents)." Use ``stats.questions``: a question with
-    ``type == "multiple_choice"`` has ``counts`` sorted from most to least
-    selected, and each count has ``label`` and ``percent`` (share of
-    respondents). Return Finding(kind="custom", ...) objects.
-    Then remove the ``xfail`` marker from ``test_custom_rule`` in tests/test_findings.py.
+    Shares are of respondents, not of ticks, so they can add up to more than
+    100% ("80% use lecture notes, 65% use YouTube").
     """
-    return []
+    findings = []
+    for q in stats.questions:
+        if q.type != "multiple_choice" or not q.counts or q.n < 10:
+            continue
+        top = q.counts[0]
+        text = f"In “{q.label}”, the most selected option is “{top.label}” ({top.percent:.0f}% of "
+        if len(q.counts) > 1:
+            second = q.counts[1]
+            text += f"respondents), followed by “{second.label}” ({second.percent:.0f}%)."
+        else:
+            text += "respondents)."
+        findings.append(Finding("choice", f"Most selected: {top.label}", text, 5,
+                                f"n = {q.n}; several answers allowed"))
+    return findings
 
 
 # --------------------------------------------------------------------------- #
@@ -201,7 +209,7 @@ def build_findings(stats: StatsReport, themes: ThemesReport | None = None,
     """Apply every rule and return the most important findings first."""
     findings = (rule_group_differences(stats) + rule_relationships(stats)
                 + rule_strongest_agreement(stats) + rule_top_themes(themes)
-                + rule_reliability(stats) + rule_custom(stats))
+                + rule_reliability(stats) + rule_top_choices(stats))
     if n_excluded:
         findings.append(Finding(
             "quality", "Data cleaning",

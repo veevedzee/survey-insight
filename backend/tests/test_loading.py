@@ -8,7 +8,6 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from survey_insight import loading
 from survey_insight.loading import (
     ColumnType,
     SurveyFileError,
@@ -142,14 +141,22 @@ def test_row_id_and_empty_columns_are_ignored() -> None:
     assert detect([None, None], "Unused") == ColumnType.IGNORE
 
 
-@pytest.mark.skipif(len(loading.ARABIC_AGREEMENT_LABELS) != 5,
-                    reason="TODO(you): fill ARABIC_AGREEMENT_LABELS in loading.py")
+ARABIC_LEVELS = ["أعارض بشدة", "أعارض", "محايد", "أوافق", "أوافق بشدة"]
+
+
 def test_arabic_likert_labels() -> None:
-    labels = loading.ARABIC_AGREEMENT_LABELS
-    values = [labels[0], labels[2], labels[4], labels[3], labels[1], labels[3]]
+    values = ["أعارض بشدة", "محايد", "أوافق بشدة", "أوافق", "أعارض", "أوافق"]
     profile = detect_column(pd.Series(values), "رأيك في المقرر")
     assert profile.detected_type == ColumnType.LIKERT
-    assert profile.likert_levels == labels
+    assert profile.likert_levels == ARABIC_LEVELS
+
+
+def test_arabic_likert_accepts_other_common_phrasings() -> None:
+    # "موافق" style forms, and typing without the hamza, mean the same levels.
+    values = ["غير موافق بشدة", "محايد", "موافق بشدة", "موافق", "غير موافق", "اوافق"]
+    profile = detect_column(pd.Series(values), "Question")
+    assert profile.detected_type == ColumnType.LIKERT
+    assert [likert_score(v, ARABIC_LEVELS) for v in values] == [1, 3, 5, 4, 2, 4]
 
 
 def test_likert_score() -> None:

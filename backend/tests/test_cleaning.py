@@ -91,8 +91,6 @@ def test_speeders_unavailable_with_single_timestamp() -> None:
     assert "Google Forms" in (check.unavailable_reason or "")
 
 
-@pytest.mark.xfail(reason="TODO(you): implement speeder_cutoff_seconds in cleaning.py",
-                   strict=False)
 def test_speeder_cutoff_is_relative_to_median() -> None:
     short_survey = pd.Series([150.0, 180.0, 210.0])  # median 3 min
     long_survey = pd.Series([1500.0, 1800.0, 2100.0])  # median 30 min

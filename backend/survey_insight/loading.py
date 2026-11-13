@@ -145,17 +145,17 @@ LIKERT_SCALES: dict[str, list[list[str]]] = {
         ["satisfied"],
         ["very satisfied"],
     ],
+    # Arabic forms phrase agreement in two common ways ("أوافق" / "موافق",
+    # "أعارض" / "غير موافق"), and people often type without the hamza (اوافق).
+    # The first spelling of each level is the display label.
+    "agreement_ar": [
+        ["أعارض بشدة", "غير موافق بشدة", "لا أوافق بشدة", "اعارض بشدة", "لا اوافق بشدة"],
+        ["أعارض", "غير موافق", "لا أوافق", "اعارض", "لا اوافق"],
+        ["محايد", "محايدة"],
+        ["أوافق", "موافق", "موافقة", "اوافق"],
+        ["أوافق بشدة", "موافق بشدة", "موافقة بشدة", "اوافق بشدة"],
+    ],
 }
-
-# TODO(you): Arabic agreement labels, ordered from "strongly disagree" to
-# "strongly agree" (5 strings), as they would appear in an Arabic Google Form.
-# Example of the shape: ["...", "...", "...", "...", "..."]
-# When the list is filled in, Arabic Likert columns are detected automatically
-# and the skipped test in tests/test_loading.py starts running.
-ARABIC_AGREEMENT_LABELS: list[str] = []
-
-if len(ARABIC_AGREEMENT_LABELS) == 5:
-    LIKERT_SCALES["agreement_ar"] = [[label] for label in ARABIC_AGREEMENT_LABELS]
 
 _LIKERT_HEADER_HINT = re.compile(
     r"\b1\s*=|\(\s*1\s*[-–]\s*\d+\s*\)|\bagree|\brate\b|\brating|satisf|\blikely|\bscale",

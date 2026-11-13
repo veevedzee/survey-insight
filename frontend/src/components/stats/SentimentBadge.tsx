@@ -1,26 +1,28 @@
 import type { SentimentSummary } from "../../api/types";
-import { formatNumber } from "../../format";
 
 /**
- * Sentiment of the English answers in a theme (VADER).
- *
- * TODO(you): make this friendlier. Right now it prints the raw average
- * compound score. Turn it into a label a non-statistician understands:
- *   - mean_compound >= 0.05  -> "Mostly positive"
- *   - mean_compound <= -0.05 -> "Mostly negative"
- *   - otherwise              -> "Mixed / neutral"
- * and give each label its own class (e.g. "sentiment-positive") so styles.css
- * can colour it. Keep the "(English only, n = …)" part: it stops readers
- * assuming Arabic answers were scored.
- * Then change `it.skip` to `it` in SentimentBadge.test.tsx.
+ * Sentiment of the English answers in a theme (VADER), in plain words.
+ * Conventional cut-offs on the average compound score: >= 0.05 positive,
+ * <= -0.05 negative. "(English only, n = …)" stops readers assuming Arabic
+ * answers were scored.
  */
+export function sentimentLabel(mean: number): { text: string; tone: "positive" | "negative" | "neutral" } {
+  if (mean >= 0.05) return { text: "Mostly positive", tone: "positive" };
+  if (mean <= -0.05) return { text: "Mostly negative", tone: "negative" };
+  return { text: "Mixed / neutral", tone: "neutral" };
+}
+
 export function SentimentBadge({ sentiment }: { sentiment: SentimentSummary | null }) {
   if (!sentiment) {
     return <span className="pill">No English answers to score</span>;
   }
+  const { text, tone } = sentimentLabel(sentiment.mean_compound);
   return (
-    <span className="pill" title={`${sentiment.positive_percent}% positive, ${sentiment.negative_percent}% negative`}>
-      Sentiment {formatNumber(sentiment.mean_compound)} (English only, n = {sentiment.n_english})
+    <span
+      className={`pill sentiment-${tone}`}
+      title={`${sentiment.positive_percent}% positive, ${sentiment.negative_percent}% negative (average score ${sentiment.mean_compound.toFixed(2)})`}
+    >
+      {text} (English only, n = {sentiment.n_english})
     </span>
   );
 }

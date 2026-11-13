@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { SentimentBadge } from "./SentimentBadge";
+import { SentimentBadge, sentimentLabel } from "./SentimentBadge";
 
 const negative = {
   n_english: 20,
@@ -11,14 +11,14 @@ const negative = {
 };
 
 describe("SentimentBadge", () => {
-  it("always says that only English answers were scored", () => {
+  it("turns the score into a plain-English label and says only English was scored", () => {
     render(<SentimentBadge sentiment={negative} />);
-    expect(screen.getByText(/English only, n = 20/)).toBeInTheDocument();
+    expect(screen.getByText(/Mostly negative \(English only, n = 20\)/)).toBeInTheDocument();
   });
 
-  // TODO(you): change `it.skip` to `it` once SentimentBadge shows a label.
-  it.skip("turns the score into a plain-English label", () => {
-    render(<SentimentBadge sentiment={negative} />);
-    expect(screen.getByText(/Mostly negative/)).toBeInTheDocument();
+  it("uses the conventional VADER cut-offs", () => {
+    expect(sentimentLabel(0.05).text).toBe("Mostly positive");
+    expect(sentimentLabel(0.0).text).toBe("Mixed / neutral");
+    expect(sentimentLabel(-0.05).text).toBe("Mostly negative");
   });
 });

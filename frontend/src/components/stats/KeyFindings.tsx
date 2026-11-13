@@ -7,7 +7,7 @@ const KIND_LABEL: Record<Finding["kind"], string> = {
   agreement: "Opinion",
   theme: "Open-ended answers",
   quality: "Data quality",
-  custom: "Finding",
+  choice: "Most common choice",
 };
 
 /**

@@ -50,12 +50,11 @@ EFFECT_THRESHOLDS: dict[str, tuple[float, float, float]] = {
 # Small building blocks (each one tested against known answers)
 # --------------------------------------------------------------------------- #
 def effect_label(value: float, thresholds: tuple[float, float, float]) -> str:
-    """Describe an effect size in words: "small", "medium" or "large".
+    """Describe an effect size in words: negligible, small, medium or large.
 
-    TODO(you): values below the "small" threshold are currently called
-    "small", which overclaims (r = 0.02 is not a small effect, it's basically
-    none). Return "negligible" for them, then remove the ``xfail`` marker from
-    ``test_effect_label_negligible`` in tests/test_stats.py.
+    Anything below the "small" threshold is "negligible": with a big sample a
+    tiny difference can be statistically significant, and calling r = 0.02 a
+    "small effect" would overclaim.
     """
     small, medium, large = thresholds
     size = round(abs(value), 2)  # judge the same rounded number the user sees
@@ -63,7 +62,9 @@ def effect_label(value: float, thresholds: tuple[float, float, float]) -> str:
         return "large"
     if size >= medium:
         return "medium"
-    return "small"
+    if size >= small:
+        return "small"
+    return "negligible"
 
 
 def holm_adjust(p_values: list[float]) -> list[float]:

@@ -232,16 +232,16 @@ def _position(value: object, levels: list[str]) -> float | None:
 def speeder_cutoff_seconds(durations: pd.Series) -> float:
     """Return the completion time (seconds) below which a response counts as a speeder.
 
-    TODO(you): replace this fixed cut-off with one relative to the typical
-    completion time, e.g. one third of the median duration. A fixed 90 seconds
-    is too strict for a 3-question survey and too lenient for a 60-question one.
-    Then remove the ``xfail`` marker from ``test_speeder_cutoff_is_relative_to_median``
-    in tests/test_cleaning.py.
+    The cut-off is one third of the median completion time, a common rule of
+    thumb in survey methodology. It is relative on purpose: a fixed limit such as
+    90 seconds would be too strict for a 3-question survey and far too lenient
+    for a 60-question one. The median (not the mean) is used because a few
+    people who leave the form open for hours would drag the mean up.
 
     Args:
         durations: Completion times in seconds of all responses (no missing values).
     """
-    return 90.0
+    return float(durations.median()) / 3
 
 
 def find_speeders(df: pd.DataFrame, timestamp_columns: list[str]) -> Check:

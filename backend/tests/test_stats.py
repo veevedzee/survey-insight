@@ -85,7 +85,6 @@ def test_effect_labels() -> None:
     assert effect_label(0.4999, t) == "medium"  # judged on the rounded value shown (0.50)
 
 
-@pytest.mark.xfail(reason="TODO(you): add a 'negligible' category in effect_label", strict=False)
 def test_effect_label_negligible() -> None:
     assert effect_label(0.05, EFFECT_THRESHOLDS["cohens_d"]) == "negligible"
 
