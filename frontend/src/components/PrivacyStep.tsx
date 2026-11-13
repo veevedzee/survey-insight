@@ -34,7 +34,10 @@ export function PrivacyStep({ report, busy, onContinue, onBack }: Props) {
       </div>
 
       <div className="stat-row">
-        <Stat value={report.removed_columns.length} label="columns removed" />
+        <Stat
+          value={report.removed_columns.length}
+          label={report.removed_columns.length === 1 ? "column removed" : "columns removed"}
+        />
         <Stat value={report.total_masked} label="values masked in answers" />
         <Stat value={report.n_rows} label="responses kept" />
         <Stat value={report.n_columns} label="columns left to analyse" />

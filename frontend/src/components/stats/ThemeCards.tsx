@@ -4,15 +4,27 @@ import { SentimentBadge } from "./SentimentBadge";
 
 const LANGUAGE_NAMES: Record<string, string> = { en: "English", ar: "Arabic", mixed: "Mixed" };
 
-export function ThemesSection({ report, loading, error, status, progress }: {
+export function ThemesSection({ report, loading, error, status, progress, onRetry }: {
   report: ThemesReport | null;
   loading: boolean;
   error: string | null;
   status: string;
   /** 0..1 for the current stage, or null when unknown. */
   progress: number | null;
+  onRetry?: () => void;
 }) {
-  if (error) return <div className="alert">{error}</div>;
+  if (error) {
+    return (
+      <div className="alert alert-actions">
+        <span>{error}</span>
+        {onRetry && (
+          <button type="button" className="button button-secondary" onClick={onRetry}>
+            Try again
+          </button>
+        )}
+      </div>
+    );
+  }
   if (!report) {
     return (
       <div className="loading-card" role="status">

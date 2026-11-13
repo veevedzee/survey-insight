@@ -1,4 +1,6 @@
 import { useRef, useState, type DragEvent } from "react";
+import { API_MODE } from "../api/client";
+import { useEngineStatus } from "../python/engine";
 
 interface Props {
   busy: boolean;
@@ -12,6 +14,7 @@ export function UploadStep({ busy, onFile, onSample }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const engine = useEngineStatus();
 
   function pick(file: File | undefined) {
     if (!file) return;
@@ -67,7 +70,13 @@ export function UploadStep({ busy, onFile, onSample }: Props) {
             strokeLinejoin="round"
           />
         </svg>
-        <strong>{busy ? "Reading your file…" : "Drop your survey file here"}</strong>
+        <strong>
+          {busy
+            ? engine.stage === "loading"
+              ? "Waiting for the analysis engine…"
+              : "Reading your file…"
+            : "Drop your survey file here"}
+        </strong>
         <span className="muted">or click to browse · CSV or XLSX · up to 10 MB</span>
       </label>
 
@@ -80,11 +89,41 @@ export function UploadStep({ busy, onFile, onSample }: Props) {
         </button>
       </div>
 
+      {API_MODE === "browser" && engine.stage !== "ready" && (
+        <div className={`engine-status${engine.stage === "error" ? " engine-error" : ""}`} role="status">
+          {engine.stage === "error" ? (
+            <span>
+              The analysis engine couldn't load ({engine.message}). Check your connection and reload
+              the page.
+            </span>
+          ) : (
+            <>
+              <span>
+                {engine.message} The first visit downloads Python and its data libraries (about 40
+                MB); later visits load from your browser's cache.
+              </span>
+              {engine.progress !== null && (
+                <div className="theme-bar" aria-hidden="true">
+                  <span style={{ width: `${Math.round(engine.progress * 100)}%` }} />
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       <ul className="trust">
-        <li>
-          <strong>Processed in memory</strong>
-          <span>Your file is never written to disk and is forgotten after 30 minutes.</span>
-        </li>
+        {API_MODE === "browser" ? (
+          <li>
+            <strong>Never leaves your device</strong>
+            <span>The analysis runs in this browser. Your file is not uploaded anywhere.</span>
+          </li>
+        ) : (
+          <li>
+            <strong>Processed in memory</strong>
+            <span>Your file is never written to disk and is forgotten after 30 minutes.</span>
+          </li>
+        )}
         <li>
           <strong>Personal data removed first</strong>
           <span>Names, emails, phone numbers and IDs are stripped before any analysis.</span>

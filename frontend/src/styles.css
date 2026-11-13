@@ -273,6 +273,14 @@ p {
   font-weight: 500;
 }
 
+.alert-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
 .error-text {
   color: var(--error);
   margin-top: 0.75rem;
@@ -473,6 +481,25 @@ p {
   justify-content: center;
   gap: 0.75rem;
   margin: 1.25rem 0 2rem;
+}
+
+.engine-status {
+  display: grid;
+  gap: 0.45rem;
+  max-width: 640px;
+  margin: -0.75rem auto 1.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.engine-error {
+  background: var(--error-soft);
+  color: var(--error);
+  border-color: transparent;
 }
 
 .trust {

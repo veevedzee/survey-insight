@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import {
+  API_MODE,
   ApiError,
   applyCleaning,
   confirmColumns,
@@ -24,6 +25,7 @@ import { Logo } from "./components/Logo";
 import { PrivacyStep } from "./components/PrivacyStep";
 import { StepIndicator } from "./components/StepIndicator";
 import { UploadStep } from "./components/UploadStep";
+import { startEngine, useEngineStatus } from "./python/engine";
 
 // The dashboard (and the charting library) is only downloaded when it's needed,
 // which keeps the first page load small.
@@ -31,7 +33,7 @@ const DashboardStep = lazy(() =>
   import("./components/DashboardStep").then((m) => ({ default: m.DashboardStep })),
 );
 
-type BackendState ={ kind: "checking" } | { kind: "up"; version: string } | { kind: "down" };
+type BackendState = { kind: "checking" } | { kind: "up"; version: string } | { kind: "down" };
 
 // The whole wizard state in one place. Each step only exists once the
 // previous one has produced its data, so impossible states can't be represented.
@@ -70,6 +72,11 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (API_MODE === "browser") {
+      // Start downloading Python right away, so it's ready by the time it's needed.
+      startEngine();
+      return;
+    }
     getHealth()
       .then((h) => setBackend({ kind: "up", version: h.version }))
       .catch(() => setBackend({ kind: "down" }));
@@ -198,7 +205,7 @@ export default function App() {
             <span className="brand-sub">Open-source survey analytics</span>
           </div>
         </div>
-        <BackendBadge state={backend} />
+        {API_MODE === "browser" ? <EngineBadge /> : <BackendBadge state={backend} />}
       </header>
 
       <StepIndicator current={STEP_INDEX[wizard.step]} />
@@ -214,11 +221,32 @@ export default function App() {
       </main>
 
       <footer className="app-footer">
-        Built with FastAPI, pandas and React &middot; zero-cost, open-source stack &middot; no paid
-        AI APIs
+        Python (pandas, SciPy, scikit-learn) running in your browser with Pyodide &middot; React
+        &middot; zero-cost, open-source stack &middot; no paid AI APIs
       </footer>
     </div>
   );
+}
+
+/** Status of the in-browser Python engine (the default, serverless mode). */
+function EngineBadge() {
+  const status = useEngineStatus();
+  if (status.stage === "ready") {
+    return (
+      <span className="badge badge-ok" title="Your data is analysed in this browser and never uploaded">
+        <span className="dot" /> Runs on your device
+      </span>
+    );
+  }
+  if (status.stage === "error") {
+    return (
+      <span className="badge badge-error" title={status.message}>
+        Engine failed to load
+      </span>
+    );
+  }
+  const pct = status.progress !== null ? ` ${Math.round(status.progress * 100)}%` : "";
+  return <span className="badge">Loading engine…{pct}</span>;
 }
 
 function BackendBadge({ state }: { state: BackendState }) {

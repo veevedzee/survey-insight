@@ -143,9 +143,9 @@ def test_themes_flow_with_vectors_from_the_browser() -> None:
 def test_upload_rejects_files_over_the_size_limit(monkeypatch) -> None:
     import dataclasses
 
-    import survey_insight.api as api
+    from survey_insight import service
 
-    monkeypatch.setattr(api, "settings", dataclasses.replace(api.settings, max_upload_mb=0))
+    monkeypatch.setattr(service, "settings", dataclasses.replace(service.settings, max_upload_mb=0))
     files = {"file": ("s.csv", b"Faculty\nEngineering\n", "text/csv")}
     response = client.post("/api/sessions", files=files)
     assert response.status_code == 413

@@ -4,7 +4,10 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "copy-python": "node scripts/copy-python.mjs",
+    "predev": "npm run copy-python",
     "dev": "vite",
+    "prebuild": "npm run copy-python",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",

@@ -36,12 +36,16 @@ export function DashboardStep({ sessionId, filename, result, stats, onEditCleani
   const [themesError, setThemesError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState<EmbedProgress | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   // Findings from the statistics come back instantly. Themes need the language
   // model, which runs in this browser, so they come after; then the findings
   // are refreshed to include the top theme of each open-ended question.
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setThemesError(null);
+    setProgress(null);
     (async () => {
       try {
         const quick = await getFindings(sessionId);
@@ -51,11 +55,13 @@ export function DashboardStep({ sessionId, filename, result, stats, onEditCleani
         setThemes(report);
         setFindings(await getFindings(sessionId));
       } catch (e) {
+        console.error("Theme detection failed:", e);
         if (!cancelled) {
+          const reason = e instanceof Error ? e.message : String(e);
           setThemesError(
             e instanceof ApiError
               ? e.message
-              : "Theme detection failed. The language model may not have downloaded; check your connection and reload.",
+              : `Theme detection failed (${reason}). The language model may not have finished downloading; check your connection and try again.`,
           );
         }
       } finally {
@@ -65,7 +71,7 @@ export function DashboardStep({ sessionId, filename, result, stats, onEditCleani
     return () => {
       cancelled = true;
     };
-  }, [sessionId, result]);
+  }, [sessionId, result, attempt]);
   const significant = stats.comparisons.filter((c) => c.significant);
   const shown = showAll ? stats.comparisons : significant;
   const sigCorrelations = stats.correlations.filter((c) => c.significant);
@@ -123,6 +129,7 @@ export function DashboardStep({ sessionId, filename, result, stats, onEditCleani
         report={themes}
         loading={loading}
         error={themesError}
+        onRetry={() => setAttempt((n) => n + 1)}
         status={describeProgress(progress)}
         progress={progress && progress.total ? progress.done / progress.total : null}
       />

@@ -13,9 +13,10 @@ example quotes, all with free, open-source tools and no paid AI APIs. I built it
 running survey data pipelines for university research and wanting a tool that does the
 statistics properly instead of producing pie charts.
 
-**Live demo:** _https://YOUR-PROJECT.vercel.app_ (click **Try with sample data**; the free
-backend may need ~1 minute to wake up, and the first visit downloads the language model to
-your browser)
+**Live demo:** **https://veevedzee.github.io/survey-insight/**: no server, no sign-up. The
+whole analysis runs in your browser (Python via Pyodide), so your survey never leaves your
+device. Click **Try with sample data**. The first visit downloads Python (~40 MB) and the
+language model (~135 MB); later visits load from cache.
 
 | Upload & column detection | Cleaning report |
 |---|---|
@@ -33,10 +34,11 @@ your browser)
    and XLSX. Every column is classified as Likert, single choice, multiple choice, numeric,
    free text, timestamp, personal identifier or ignore, with a plain-English reason. You
    can correct any type. Grid questions (`Question [item]`) are grouped into scales.
-2. **Privacy first.** Identifier columns are dropped; emails, phone numbers (including
+2. **Privacy first.** The hosted version analyses the file inside your browser, so it is
+   never uploaded. Identifier columns are dropped; emails, phone numbers (including
    Arabic-Indic digits), student/national IDs and known names are masked inside written
-   answers. You see exactly what was removed. Uploads live in memory only and expire after
-   30 minutes; the original file is discarded as soon as columns are confirmed.
+   answers, and you see exactly what was removed. The original data is discarded as soon as
+   columns are confirmed.
 3. **Cleaning report.** Duplicates, incomplete responses, straight-lining, speeders (when
    start/end times exist) and numeric outliers (IQR fences), each with per-row reasons.
    You choose what to exclude and see live before/after counts. Spelling variants
@@ -60,36 +62,36 @@ your browser)
 
 | Layer | Tools |
 |---|---|
-| Backend | Python 3.12, FastAPI, pandas, NumPy, SciPy, scikit-learn, VADER |
-| Text model | `paraphrase-multilingual-MiniLM-L12-v2` (ONNX, 8-bit) via Transformers.js in a Web Worker |
-| Frontend | React 19, TypeScript, Vite, Recharts |
+| Analysis (Python) | Python 3.14 via **Pyodide** in the browser: pandas, NumPy, SciPy, scikit-learn, VADER |
+| Text model | `paraphrase-multilingual-MiniLM-L12-v2` (ONNX, 8-bit) via **Transformers.js** |
+| Frontend | React 19, TypeScript, Vite, Recharts, Web Workers |
+| Optional server | FastAPI (same Python package) |
 | Tests | pytest (+ coverage), Vitest, React Testing Library, ruff |
-| Hosting | Vercel (frontend), Render free web service (backend), GitHub Actions (CI) — all free |
+| Hosting | GitHub Pages + GitHub Actions — free, no server |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    subgraph B[Visitor's browser]
-        UI[React app<br/>from Vercel] --> W[Web Worker<br/>Transformers.js<br/>multilingual model]
-    end
-    UI -->|JSON over HTTPS| A
+    GH[GitHub Pages<br/>static files] -->|first visit| UI
 
-    subgraph R[Render free web service, ~200 MB RAM]
-        A[FastAPI<br/>api.py] --> L[loading.py<br/>read file, detect types]
-        A --> P[privacy.py<br/>drop and mask personal data]
-        A --> C[cleaning.py<br/>quality flags]
-        A --> S[stats.py<br/>tests, effect sizes, Holm]
-        A --> T[text_themes.py<br/>cluster, label, quote]
-        A --> F[findings.py<br/>rule-based summary]
-        A --> E[exporting.py<br/>cleaned CSV]
-        A --> M[(In-memory sessions<br/>30-min expiry)]
+    subgraph B[Visitor's browser: nothing is uploaded]
+        UI[React app<br/>wizard + charts] -->|"same calls as an HTTP API<br/>(GET/POST /api/...)"| PW
+        UI --> EW
+        subgraph PW[Web Worker: Python via Pyodide]
+            BR[bridge.py] --> SV[service.py]
+            SV --> L[loading.py] & P[privacy.py] & C[cleaning.py]
+            SV --> S[stats.py] & T[text_themes.py] & F[findings.py] & E[exporting.py]
+        end
+        EW[Web Worker: Transformers.js<br/>multilingual sentence model] -. "answer vectors" .-> T
     end
-    W -. "answer vectors (384 numbers each)" .-> T
 ```
 
-Themes take three steps: the browser asks `GET /texts` which answers to embed, embeds them
-locally, and sends only the vectors to `POST /themes`, where they are clustered and labelled.
+The Python package is written once and has two front doors: **`bridge.py`** (Pyodide, used by
+the hosted demo) and **`api.py`** (FastAPI, for running it as a server). Both call the same
+framework-free **`service.py`**, so the frontend uses the same API paths in either mode.
+Themes take three steps: Python lists the answers to embed, the model worker turns them into
+vectors, and Python clusters and labels them.
 
 Data flows one way through the pipeline:
 
@@ -108,26 +110,29 @@ and returns dataclasses, so it is tested without a web server.
 
 ## Run locally
 
-Requirements: Python 3.12+, Node 20+.
+Requirements: Node 20+ (and Python 3.12+ only for the tests or server mode).
 
 ```bash
-# Backend (from backend/)
+# From frontend/
+npm install
+npm run dev
+```
+
+Open http://localhost:5173 and click **Try with sample data**. That's all: the Python package
+in `backend/survey_insight` is copied into the site and runs in the browser.
+
+**Server mode (optional):** run the same package with FastAPI and point the frontend at it.
+
+```bash
+# From backend/
 python -m venv .venv
 .venv\Scripts\activate            # macOS/Linux: source .venv/bin/activate
 pip install -r requirements-dev.txt
 uvicorn survey_insight.api:app --reload --port 8000
 ```
 
-API docs: http://127.0.0.1:8000/docs
-
-```bash
-# Frontend (from frontend/), in a second terminal
-npm install
-npm run dev
-```
-
-Open http://localhost:5173 and click **Try with sample data**. The first time themes are
-computed, the browser downloads the language model (~135 MB) and caches it.
+Then start the frontend with `VITE_API_URL=http://127.0.0.1:8000`. API docs:
+http://127.0.0.1:8000/docs
 
 The sample survey is synthetic (300 students, study habits and wellbeing, with planted
 effects and deliberately messy rows). Regenerate it with `python sample_data/generate_sample.py`.
@@ -170,7 +175,8 @@ themselves. Sentiment uses **VADER**, an English word list, so Arabic answers ar
 not scored and the UI says so. Key findings come from explicit rules over the computed
 statistics, never from a language model, so each sentence is traceable to a test.
 
-**Privacy.** Personal data is removed before any analysis, in two layers: identifier columns
+**Privacy.** On the hosted version the file is never uploaded: Python runs in the visitor's
+browser. Personal data is still removed before any analysis, in two layers: identifier columns
 are dropped (detected from headers and values), and written answers are scanned for emails,
 phone numbers, IDs and names. Detection is tuned per context: aggressive on whole columns
 (dropping a column wrongly costs nothing) and conservative inside text (single first names
@@ -180,16 +186,17 @@ types are confirmed. Known limitation: names written inside answers are only cau
 same name appears in a name column, since general name recognition (especially in Arabic)
 needs a heavier model than free hosting allows.
 
-**Zero-cost hosting, by moving the model to the browser.** With the embedding model on the
-server (PyTorch + sentence-transformers) the backend needed ~910 MB of RAM, too much for any
-free host that doesn't require a credit card (Hugging Face stopped offering free Docker Spaces
-in 2026; Render's free tier has 512 MB). So the model runs in the visitor's browser instead:
-Transformers.js loads the ONNX, 8-bit version of the same model in a Web Worker (~135 MB,
-downloaded once and cached), and only the vectors go to the server. The backend dropped to
-~200 MB and runs on **Render's free tier**; the frontend is static files on **Vercel**.
-Trade-offs: the first visit downloads the model, embedding ~350 answers takes ~30 s on a
-laptop, and free Render services sleep after 15 minutes idle, so the first request then waits
-about a minute.
+**Zero-cost hosting: no server at all.** The plan changed twice, and the reasons are worth
+knowing. With the embedding model on the server (PyTorch + sentence-transformers) the backend
+needed ~910 MB of RAM; Hugging Face stopped offering free Docker Spaces in 2026. Moving the
+model into the browser (Transformers.js, ONNX 8-bit, ~135 MB cached) cut the backend to
+~200 MB, which fits Render's free tier, but Render then required a credit card. So the
+backend moved into the browser too: **Pyodide** runs the unchanged Python package (pandas,
+SciPy, scikit-learn) in a Web Worker, and **GitHub Pages** serves the static site for free.
+Trade-offs: a ~40 MB + ~135 MB first download, slower analysis on weak phones, and the
+visitor's device does the work. In return: zero cost, no cold starts, nothing to keep
+running, and the strongest privacy guarantee (the data never leaves the device). The FastAPI
+server mode remains for anyone who wants it.
 
 **Smaller choices.** Rule-based column detection (every guess has a reason the user can fix);
 IQR outlier fences instead of z-scores (the mean and SD are pulled by the very outliers being
@@ -221,12 +228,12 @@ These were left as exercises while building the project. <!-- Fill in as you com
 - **Shareable reports** stored temporarily with an expiring link.
 - **Faster in-browser embedding**: WebGPU where available, or multi-threaded WebAssembly via
   cross-origin isolation headers.
-- **Fully client-side mode** with Pyodide (Python in the browser), so surveys never leave the
-  visitor's device and no server is needed at all.
+- **Offline support** with a service worker, so the app works without internet after the
+  first visit.
 
 ## Deployment
 
-Step-by-step free deployment (Render + Vercel): see [DEPLOYMENT.md](DEPLOYMENT.md).
+Free deployment on GitHub Pages (one setting to switch on): see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## License
 

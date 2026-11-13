@@ -9,6 +9,9 @@ venv/
 htmlcov/
 *.egg-info/
 
+# Generated copy of the Python package for the in-browser build
+frontend/public/py/
+
 # Node / Vite
 node_modules/
 dist/
